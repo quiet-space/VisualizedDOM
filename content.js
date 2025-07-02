@@ -13,6 +13,15 @@ let visualizationColors = [
 let colorIndex = 0;
 let processedNodes = new Set();
 
+// 노드 진행 상태 관리
+let nodeStates = new Map(); // elementId -> state
+const NODE_STATES = {
+  LOADED: { name: "Loaded", color: "#52c41a", bgColor: "#f6ffed" },
+  PARSED: { name: "Parsed", color: "#1890ff", bgColor: "#e6f7ff" },
+  LAYOUT: { name: "Layout", color: "#fa8c16", bgColor: "#fff7e6" },
+  COMPOSITED: { name: "Composited", color: "#722ed1", bgColor: "#f9f0ff" },
+};
+
 // 확장 프로그램으로부터 메시지 수신
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "startDOMTreeVisualization") {
@@ -160,7 +169,77 @@ function createDOMTreeVisualization(
     }
   };
 
+  // 투명도 조절 슬라이더 추가
+  const opacityControl = document.createElement("div");
+  opacityControl.style.cssText = `
+    display: flex;
+    align-items: center;
+    margin-right: 12px;
+    gap: 8px;
+  `;
+
+  const opacityLabel = document.createElement("span");
+  opacityLabel.textContent = "💫";
+  opacityLabel.style.cssText = `
+    font-size: 14px;
+    opacity: 0.7;
+  `;
+
+  const opacitySlider = document.createElement("input");
+  opacitySlider.type = "range";
+  opacitySlider.min = "30";
+  opacitySlider.max = "100";
+  opacitySlider.value = "95";
+  opacitySlider.style.cssText = `
+    width: 80px;
+    height: 4px;
+    background: ${
+      isDarkMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"
+    };
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  `;
+
+  // 슬라이더 스타일
+  const sliderStyle = document.createElement("style");
+  sliderStyle.textContent = `
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #007aff;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #007aff;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+  `;
+  document.head.appendChild(sliderStyle);
+
+  // 투명도 변경 이벤트
+  opacitySlider.addEventListener("input", (e) => {
+    const opacity = e.target.value / 100;
+    treeContainer.style.opacity = opacity;
+  });
+
+  opacityControl.appendChild(opacityLabel);
+  opacityControl.appendChild(opacitySlider);
+
   headerContainer.appendChild(title);
+  headerContainer.appendChild(opacityControl);
   headerContainer.appendChild(treeCloseButton);
   treeContainer.appendChild(headerContainer);
 
@@ -250,7 +329,51 @@ function createDOMTreeVisualization(
     }
   };
 
+  // Preview 윈도우용 투명도 조절 슬라이더
+  const previewOpacityControl = document.createElement("div");
+  previewOpacityControl.style.cssText = `
+    display: flex;
+    align-items: center;
+    margin-right: 12px;
+    gap: 8px;
+  `;
+
+  const previewOpacityLabel = document.createElement("span");
+  previewOpacityLabel.textContent = "💫";
+  previewOpacityLabel.style.cssText = `
+    font-size: 14px;
+    opacity: 0.7;
+  `;
+
+  const previewOpacitySlider = document.createElement("input");
+  previewOpacitySlider.type = "range";
+  previewOpacitySlider.min = "30";
+  previewOpacitySlider.max = "100";
+  previewOpacitySlider.value = "95";
+  previewOpacitySlider.style.cssText = `
+    width: 80px;
+    height: 4px;
+    background: ${
+      isDarkMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"
+    };
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  `;
+
+  // Preview 투명도 변경 이벤트
+  previewOpacitySlider.addEventListener("input", (e) => {
+    const opacity = e.target.value / 100;
+    previewContainer.style.opacity = opacity;
+  });
+
+  previewOpacityControl.appendChild(previewOpacityLabel);
+  previewOpacityControl.appendChild(previewOpacitySlider);
+
   previewHeaderContainer.appendChild(previewTitle);
+  previewHeaderContainer.appendChild(previewOpacityControl);
   previewHeaderContainer.appendChild(previewCloseButton);
   previewContainer.appendChild(previewHeaderContainer);
 
@@ -260,7 +383,7 @@ function createDOMTreeVisualization(
   previewContent.style.cssText = `
     flex: 1;
     position: relative;
-    overflow: hidden;
+    overflow: auto;
     background: ${isDarkMode ? "#2c2c2e" : "#f9f9f9"};
     border: 1px solid ${
       isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
@@ -268,7 +391,45 @@ function createDOMTreeVisualization(
     border-radius: 12px;
     margin: 15px 20px 20px 20px;
     transition: all 0.2s ease;
+    scrollbar-width: thin;
+    scrollbar-color: ${
+      isDarkMode
+        ? "rgba(255, 255, 255, 0.3) transparent"
+        : "rgba(0, 0, 0, 0.3) transparent"
+    };
   `;
+  // Preview 스크롤 컨테이너 추가
+  const scrollContainer = document.createElement("div");
+  scrollContainer.id = "preview-scroll-container";
+  scrollContainer.style.cssText = `
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 800px;
+    min-height: 1000px;
+  `;
+
+  // 페이지 크기 표시용 배경 가이드 추가
+  const pageGuide = document.createElement("div");
+  pageGuide.id = "page-guide";
+  pageGuide.style.cssText = `
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    border: 1px dashed ${
+      isDarkMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"
+    };
+    background: ${
+      isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"
+    };
+    pointer-events: none;
+    z-index: 1;
+    border-radius: 4px;
+  `;
+
+  scrollContainer.appendChild(pageGuide);
+  previewContent.appendChild(scrollContainer);
+
   previewContainer.appendChild(previewContent);
 
   // 리사이즈 핸들 추가
@@ -333,6 +494,28 @@ function createDOMTreeVisualization(
         isDarkMode ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, 0.5)"
       };
     }
+    #preview-content::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    #preview-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #preview-content::-webkit-scrollbar-thumb {
+      background: ${
+        isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+      };
+      border-radius: 3px;
+      transition: all 0.2s ease;
+    }
+    #preview-content::-webkit-scrollbar-thumb:hover {
+      background: ${
+        isDarkMode ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, 0.5)"
+      };
+    }
+    #preview-content::-webkit-scrollbar-corner {
+      background: transparent;
+    }
   `;
   document.head.appendChild(scrollbarStyle);
 
@@ -358,11 +541,14 @@ function createDOMTreeVisualization(
 
   // DOM 트리 구조 분석 및 표시
   setTimeout(() => {
-    buildDOMTree(
+    // 페이지 가이드 크기 설정
+    setupPageGuide(previewContent);
+
+    // 실제 브라우저 렌더링 순서로 DOM 트리 구성
+    buildDOMTreeInDocumentOrder(
       document.documentElement,
       treeContent,
       previewContent,
-      0,
       isDarkMode
     );
 
@@ -376,6 +562,714 @@ function createDOMTreeVisualization(
       }, 2000);
     }, 8000); // 더 긴 시간으로 조정
   }, 500);
+}
+
+// Badge 생성 함수
+function createBadge(state, isDarkMode = false) {
+  const badge = document.createElement("span");
+  badge.classList.add("node-badge");
+  badge.dataset.state = state;
+  badge.textContent = NODE_STATES[state].name;
+
+  const stateInfo = NODE_STATES[state];
+  badge.style.cssText = `
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 500;
+    color: ${stateInfo.color};
+    background: ${
+      isDarkMode
+        ? `rgba(${stateInfo.color
+            .slice(1)
+            .match(/.{2}/g)
+            .map((hex) => parseInt(hex, 16))
+            .join(", ")}, 0.15)`
+        : stateInfo.bgColor
+    };
+    border: 1px solid ${stateInfo.color}40;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.3s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+
+  // 애니메이션으로 나타나기
+  setTimeout(() => {
+    badge.style.opacity = "1";
+    badge.style.transform = "scale(1)";
+  }, 50);
+
+  return badge;
+}
+
+// 렌더링 단계를 거치는 요소인지 확인하는 함수
+function shouldShowRenderingStages(element) {
+  if (!element || !element.tagName) return false;
+
+  const tagName = element.tagName.toLowerCase();
+
+  // 렌더링 단계를 거치지 않는 요소들
+  const nonRenderingTags = [
+    "script",
+    "style",
+    "link",
+    "meta",
+    "title",
+    "head",
+    "base",
+    "noscript",
+    "template",
+    "source",
+    "track",
+  ];
+
+  // 시각화 창 요소들도 제외
+  if (shouldSkipElement(element)) {
+    return false;
+  }
+
+  return !nonRenderingTags.includes(tagName);
+}
+
+// 노드 상태 업데이트 함수
+function updateNodeState(elementId, state, isDarkMode = false) {
+  nodeStates.set(elementId, state);
+
+  const nodeContainer = document.querySelector(
+    `[data-element-id="${elementId}"]`
+  );
+  if (!nodeContainer) return;
+
+  const badgeContainer = nodeContainer.querySelector(".node-badges");
+  if (!badgeContainer) return;
+
+  // 이미 있는 badge인지 확인
+  const existingBadge = badgeContainer.querySelector(`[data-state="${state}"]`);
+  if (existingBadge) return;
+
+  const badge = createBadge(state, isDarkMode);
+  badgeContainer.appendChild(badge);
+}
+
+function setupPageGuide(previewContainer) {
+  const pageGuide = previewContainer.querySelector("#page-guide");
+  const scrollContainer = previewContainer.querySelector(
+    "#preview-scroll-container"
+  );
+  if (!pageGuide || !scrollContainer) return;
+
+  // Preview 영역 크기
+  const previewRect = previewContainer.getBoundingClientRect();
+
+  // 전체 페이지 크기
+  const pageWidth = Math.max(
+    document.documentElement.scrollWidth,
+    document.documentElement.offsetWidth,
+    document.documentElement.clientWidth
+  );
+  const pageHeight = Math.max(
+    document.documentElement.scrollHeight,
+    document.documentElement.offsetHeight,
+    document.documentElement.clientHeight
+  );
+
+  // 전체 페이지 크기를 preview 영역에 맞게 스케일링
+  const availableWidth = previewRect.width - 40; // 패딩 고려
+  const availableHeight = previewRect.height - 40; // 패딩 고려
+
+  const scaleX = availableWidth / pageWidth;
+  const scaleY = availableHeight / pageHeight;
+  const scale = Math.min(scaleX, scaleY, 0.7);
+
+  const guideWidth = pageWidth * scale;
+  const guideHeight = pageHeight * scale;
+
+  // 스크롤 컨테이너 크기를 실제 페이지 크기에 맞게 조정
+  const containerWidth = Math.max(guideWidth + 40, 800); // 최소 800px
+  const containerHeight = Math.max(guideHeight + 40, 1000); // 최소 1000px
+
+  scrollContainer.style.width = `${containerWidth}px`;
+  scrollContainer.style.height = `${containerHeight}px`;
+
+  // 페이지 가이드 크기 설정
+  pageGuide.style.width = `${guideWidth}px`;
+  pageGuide.style.height = `${guideHeight}px`;
+
+  // 페이지 정보 라벨 추가
+  const pageInfo =
+    pageGuide.querySelector(".page-info") || document.createElement("div");
+  pageInfo.className = "page-info";
+  pageInfo.textContent = `${pageWidth}×${pageHeight}px (${Math.round(
+    scale * 100
+  )}%)`;
+  pageInfo.style.cssText = `
+    position: absolute;
+    top: -25px;
+    left: 0;
+    font-size: 10px;
+    color: #666;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    font-weight: 500;
+  `;
+
+  if (!pageGuide.querySelector(".page-info")) {
+    pageGuide.appendChild(pageInfo);
+  }
+
+  // Viewport 표시 영역 추가 (더 정확한 계산)
+  const viewportIndicator =
+    pageGuide.querySelector(".viewport-indicator") ||
+    document.createElement("div");
+  viewportIndicator.className = "viewport-indicator";
+
+  const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+  const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
+  // 실제 viewport 크기 (스크롤바 제외)
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
+
+  // 정확한 viewport 위치와 크기 계산
+  const viewportX = scrollX * scale;
+  const viewportY = scrollY * scale;
+  const viewportW = Math.min(viewportWidth * scale, guideWidth - viewportX);
+  const viewportH = Math.min(viewportHeight * scale, guideHeight - viewportY);
+
+  viewportIndicator.style.cssText = `
+    position: absolute;
+    left: ${viewportX}px;
+    top: ${viewportY}px;
+    width: ${Math.max(0, viewportW)}px;
+    height: ${Math.max(0, viewportH)}px;
+    border: 2px solid #007aff;
+    background: rgba(0, 122, 255, 0.1);
+    pointer-events: none;
+    z-index: 2;
+    box-shadow: 0 0 8px rgba(0, 122, 255, 0.3);
+  `;
+
+  if (!pageGuide.querySelector(".viewport-indicator")) {
+    pageGuide.appendChild(viewportIndicator);
+  }
+}
+
+// 실제 브라우저 렌더링 순서로 DOM 트리 구성
+function buildDOMTreeInDocumentOrder(
+  rootElement,
+  treeContainer,
+  previewContainer,
+  isDarkMode
+) {
+  // 문서 순서대로 모든 요소 수집
+  const allElements = [];
+  const elementDepths = new Map();
+
+  function collectElements(element, depth = 0) {
+    if (shouldSkipElement(element)) return;
+
+    allElements.push(element);
+    elementDepths.set(element, depth);
+
+    // 자식 요소들 순차적으로 수집
+    Array.from(element.children || []).forEach((child) => {
+      collectElements(child, depth + 1);
+    });
+  }
+
+  collectElements(rootElement);
+
+  // 실제 브라우저 렌더링 순서 시뮬레이션
+  let currentTime = 0;
+  const RENDER_INTERVAL = 100; // 100ms 간격으로 요소 처리
+
+  allElements.forEach((element, index) => {
+    const depth = elementDepths.get(element);
+    const elementType = getElementRenderingPriority(element);
+
+    // 요소 타입에 따른 렌더링 지연시간 계산
+    const baseDelay = currentTime + index * RENDER_INTERVAL;
+    const typeDelay = elementType.delay;
+    const totalDelay = baseDelay + typeDelay;
+
+    setTimeout(() => {
+      buildSingleDOMNode(
+        element,
+        treeContainer,
+        previewContainer,
+        depth,
+        isDarkMode,
+        index
+      );
+    }, totalDelay);
+
+    // 다음 요소를 위한 시간 업데이트
+    currentTime += RENDER_INTERVAL;
+  });
+}
+
+// 요소의 렌더링 우선순위 결정
+function getElementRenderingPriority(element) {
+  if (!element.tagName) return { priority: 0, delay: 0 };
+
+  const tagName = element.tagName.toLowerCase();
+
+  // 실제 브라우저 렌더링 우선순위
+  const priorities = {
+    // Critical resources (즉시 처리)
+    html: { priority: 1, delay: 0 },
+    head: { priority: 1, delay: 0 },
+    meta: { priority: 1, delay: 0 },
+    title: { priority: 1, delay: 0 },
+    link: { priority: 1, delay: 50 }, // CSS 로드
+    style: { priority: 1, delay: 30 }, // 인라인 CSS
+
+    // Scripts (블로킹 가능)
+    script: { priority: 2, delay: 100 },
+
+    // Body and structural elements
+    body: { priority: 3, delay: 0 },
+    header: { priority: 3, delay: 0 },
+    nav: { priority: 3, delay: 0 },
+    main: { priority: 3, delay: 0 },
+    section: { priority: 3, delay: 0 },
+    article: { priority: 3, delay: 0 },
+    aside: { priority: 3, delay: 0 },
+    footer: { priority: 3, delay: 0 },
+
+    // Content elements
+    div: { priority: 4, delay: 0 },
+    span: { priority: 4, delay: 0 },
+    p: { priority: 4, delay: 0 },
+    h1: { priority: 4, delay: 0 },
+    h2: { priority: 4, delay: 0 },
+    h3: { priority: 4, delay: 0 },
+    h4: { priority: 4, delay: 0 },
+    h5: { priority: 4, delay: 0 },
+    h6: { priority: 4, delay: 0 },
+
+    // Interactive elements
+    button: { priority: 4, delay: 0 },
+    input: { priority: 4, delay: 0 },
+    form: { priority: 4, delay: 0 },
+    select: { priority: 4, delay: 0 },
+    textarea: { priority: 4, delay: 0 },
+
+    // Media elements (리소스 로딩 시간 고려)
+    img: { priority: 5, delay: 200 },
+    video: { priority: 5, delay: 300 },
+    audio: { priority: 5, delay: 250 },
+    canvas: { priority: 5, delay: 100 },
+    svg: { priority: 5, delay: 50 },
+  };
+
+  return priorities[tagName] || { priority: 4, delay: 0 };
+}
+
+// 단일 DOM 노드 구성 (기존 buildDOMTree에서 단일 노드 부분 추출)
+function buildSingleDOMNode(
+  element,
+  treeContainer,
+  previewContainer,
+  depth,
+  isDarkMode,
+  documentIndex
+) {
+  const nodeDiv = document.createElement("div");
+  const indent = "  ".repeat(depth);
+  const tagName = element.tagName
+    ? element.tagName.toLowerCase()
+    : element.nodeName;
+
+  // 자식 요소들 확인 (시각화 창 요소들은 제외)
+  const children = Array.from(element.children || []).filter(
+    (child) => !shouldSkipElement(child)
+  );
+  const hasChildren = children.length > 0;
+
+  // 부모 컨테이너 찾기 (depth에 따라)
+  let container = treeContainer;
+  if (depth > 0) {
+    // 부모 요소의 children container 찾기
+    const parentElement = element.parentElement;
+    if (parentElement) {
+      const parentContainer = treeContainer.querySelector(
+        `[data-element-id="${getElementUniqueId(
+          parentElement
+        )}"] .tree-children`
+      );
+      if (parentContainer) {
+        container = parentContainer;
+      }
+    }
+  }
+
+  // 노드 컨테이너 생성
+  const nodeContainer = document.createElement("div");
+  nodeContainer.classList.add("tree-node-container");
+  nodeContainer.dataset.elementId = getElementUniqueId(element);
+  nodeContainer.dataset.documentIndex = documentIndex; // 문서 순서 저장
+
+  // 나머지 노드 구성 로직은 기존과 동일...
+  buildNodeContent(
+    element,
+    nodeContainer,
+    previewContainer,
+    depth,
+    isDarkMode,
+    hasChildren,
+    tagName,
+    indent
+  );
+
+  container.appendChild(nodeContainer);
+}
+
+// 노드 내용 구성 함수 (기존 buildDOMTree 로직)
+function buildNodeContent(
+  element,
+  nodeContainer,
+  previewContainer,
+  depth,
+  isDarkMode,
+  hasChildren,
+  tagName,
+  indent
+) {
+  // 노드 헤더 생성 (토글 버튼 + 노드 정보)
+  const nodeHeader = document.createElement("div");
+  nodeHeader.classList.add("tree-node-header");
+  nodeHeader.style.cssText = `
+    display: flex;
+    align-items: center;
+    margin: 4px 0;
+    padding: 10px 14px;
+    border-left: 3px solid ${getDepthColor(depth)};
+    background: rgba(${getDepthRGB(depth)}, 0.08);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    color: ${isDarkMode ? "#f2f2f7" : "#1d1d1f"};
+    border: 1px solid rgba(${getDepthRGB(depth)}, 0.2);
+    font-weight: 500;
+  `;
+
+  // 토글 버튼 (자식이 있을 때만)
+  let toggleButton = null;
+  if (hasChildren) {
+    toggleButton = document.createElement("span");
+    toggleButton.classList.add("tree-toggle");
+    toggleButton.textContent = "▼"; // 기본적으로 펼쳐진 상태
+    toggleButton.title = "Click to collapse/expand";
+    toggleButton.style.cssText = `
+      margin-right: 10px;
+      font-size: 11px;
+      color: ${isDarkMode ? "#a1a1a6" : "#666"};
+      transition: transform 0.2s ease, background 0.2s ease;
+      user-select: none;
+      min-width: 14px;
+      text-align: center;
+      cursor: pointer;
+      border-radius: 50%;
+      padding: 3px;
+      font-weight: 600;
+    `;
+
+    // 토글 버튼 호버 효과
+    toggleButton.addEventListener("mouseenter", () => {
+      toggleButton.style.background = isDarkMode
+        ? "rgba(100, 181, 246, 0.15)"
+        : "rgba(0, 122, 255, 0.1)";
+      toggleButton.style.color = isDarkMode ? "#f2f2f7" : "#007aff";
+    });
+
+    toggleButton.addEventListener("mouseleave", () => {
+      toggleButton.style.background = "transparent";
+      toggleButton.style.color = isDarkMode ? "#a1a1a6" : "#666";
+    });
+
+    nodeHeader.appendChild(toggleButton);
+  } else {
+    // 자식이 없으면 빈 공간 추가 (정렬 맞춤)
+    const spacer = document.createElement("span");
+    spacer.style.cssText = `
+      margin-right: 24px;
+      min-width: 14px;
+    `;
+    nodeHeader.appendChild(spacer);
+  }
+
+  // 노드 텍스트 생성 - 태그 이름만 표시 (waterfall 스타일)
+  const nodeText = document.createElement("span");
+  nodeText.innerHTML = `${indent}${depth > 0 ? "├─ " : ""}${tagName}`;
+  nodeText.style.cssText = `
+    white-space: pre-wrap;
+    flex: 1;
+    color: ${isDarkMode ? "#f2f2f7" : "#1d1d1f"};
+    font-weight: 500;
+  `;
+  nodeHeader.appendChild(nodeText);
+
+  // 렌더링 단계를 거치는 요소들에만 badge 컨테이너 추가
+  if (shouldShowRenderingStages(element)) {
+    const badgeContainer = document.createElement("div");
+    badgeContainer.classList.add("node-badges");
+    badgeContainer.style.cssText = `
+      display: flex;
+      gap: 4px;
+      margin-left: 8px;
+    `;
+    nodeHeader.appendChild(badgeContainer);
+  }
+
+  // 자식 요소들을 담을 컨테이너
+  const childrenContainer = document.createElement("div");
+  childrenContainer.classList.add("tree-children");
+  childrenContainer.style.cssText = `
+    margin-left: 16px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+  `;
+
+  // 노드 컨테이너에 헤더와 자식 컨테이너 추가
+  nodeContainer.appendChild(nodeHeader);
+  nodeContainer.appendChild(childrenContainer);
+
+  // 헤더에 이벤트 핸들러 추가
+  nodeHeader.dataset.elementId = getElementUniqueId(element);
+  addNodeEventHandlers(
+    nodeHeader,
+    element,
+    childrenContainer,
+    toggleButton,
+    hasChildren,
+    depth,
+    previewContainer,
+    isDarkMode
+  );
+
+  // 노드 애니메이션 및 렌더링 단계 시뮬레이션
+  setTimeout(() => {
+    // 트리 노드 애니메이션
+    nodeHeader.style.opacity = "0";
+    nodeHeader.style.transform = "translateX(-20px)";
+    setTimeout(() => {
+      nodeHeader.style.opacity = "1";
+      nodeHeader.style.transform = "translateX(0)";
+    }, 50);
+
+    // 렌더링 단계를 거치는 요소들만 badge 업데이트
+    if (shouldShowRenderingStages(element)) {
+      // 1. Loaded 상태 업데이트
+      setTimeout(() => {
+        updateNodeState(getElementUniqueId(element), "LOADED", isDarkMode);
+      }, 200);
+
+      // 2. DOM 생성 단계 - 미리보기에 기본 박스 생성
+      if (shouldShowInPreview(element)) {
+        setTimeout(() => {
+          createDOMPhase(element, previewContainer, depth);
+          updateNodeState(getElementUniqueId(element), "PARSED", isDarkMode);
+        }, 300);
+
+        // 3. Layout 계산 단계
+        setTimeout(() => {
+          layoutPhase(element, previewContainer, depth);
+          updateNodeState(getElementUniqueId(element), "LAYOUT", isDarkMode);
+        }, 800);
+
+        // 4. Composite 단계 (페인팅)
+        setTimeout(() => {
+          compositePhase(element, previewContainer, depth);
+          updateNodeState(
+            getElementUniqueId(element),
+            "COMPOSITED",
+            isDarkMode
+          );
+        }, 1300);
+      } else {
+        // Preview에 표시되지 않지만 렌더링 단계를 거치는 요소들
+        setTimeout(() => {
+          updateNodeState(getElementUniqueId(element), "PARSED", isDarkMode);
+        }, 300);
+        setTimeout(() => {
+          updateNodeState(getElementUniqueId(element), "LAYOUT", isDarkMode);
+        }, 800);
+        setTimeout(() => {
+          updateNodeState(
+            getElementUniqueId(element),
+            "COMPOSITED",
+            isDarkMode
+          );
+        }, 1300);
+      }
+    } else {
+      // 렌더링 단계를 거치지 않는 요소들 (script, link, meta 등)
+      // Preview에 표시되는 경우에만 미리보기 생성
+      if (shouldShowInPreview(element)) {
+        setTimeout(() => {
+          createDOMPhase(element, previewContainer, depth);
+        }, 300);
+        setTimeout(() => {
+          layoutPhase(element, previewContainer, depth);
+        }, 800);
+        setTimeout(() => {
+          compositePhase(element, previewContainer, depth);
+        }, 1300);
+      }
+    }
+  }, 100); // 문서 순서 기반이므로 짧은 지연시간
+}
+
+// 노드 이벤트 핸들러 추가
+function addNodeEventHandlers(
+  nodeHeader,
+  element,
+  childrenContainer,
+  toggleButton,
+  hasChildren,
+  depth,
+  previewContainer,
+  isDarkMode
+) {
+  // 호버 효과
+  nodeHeader.onmouseenter = () => {
+    nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.15)`;
+    nodeHeader.style.transform = "translateX(4px)";
+    nodeHeader.style.boxShadow = `0 2px 8px rgba(${getDepthRGB(depth)}, 0.3)`;
+    // 실제 DOM 요소에 파란색 dashed border 추가
+    highlightElement(element, true);
+  };
+
+  nodeHeader.onmouseleave = () => {
+    // 선택된 상태가 아닐 때만 스타일 제거
+    if (!nodeHeader.classList.contains("selected")) {
+      nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.08)`;
+      nodeHeader.style.transform = "translateX(0)";
+      nodeHeader.style.boxShadow = "none";
+
+      // 텍스트 색상 유지
+      const nodeTextSpan = nodeHeader.querySelector("span:not(.tree-toggle)");
+      if (nodeTextSpan) {
+        nodeTextSpan.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+      }
+
+      // 하이라이트 제거
+      removeHighlight(element);
+    }
+  };
+
+  // 클릭 효과
+  nodeHeader.onclick = (e) => {
+    e.stopPropagation(); // 이벤트 버블링 방지
+
+    // 자식이 있는 노드에서 더블클릭 또는 일반 클릭 시 expand/collapse 기능
+    if (hasChildren) {
+      const isExpanded =
+        childrenContainer.style.maxHeight !== "0px" &&
+        childrenContainer.style.maxHeight !== "";
+
+      // 더블클릭이 아닌 일반 클릭도 expand/collapse 기능으로 처리
+      if (isExpanded) {
+        // 접기
+        childrenContainer.style.maxHeight = "0px";
+        childrenContainer.style.opacity = "0";
+        if (toggleButton) {
+          toggleButton.textContent = "▶";
+          toggleButton.style.transform = "rotate(-90deg)";
+        }
+      } else {
+        // 펼치기
+        childrenContainer.style.maxHeight = "none";
+        childrenContainer.style.opacity = "1";
+        if (toggleButton) {
+          toggleButton.textContent = "▼";
+          toggleButton.style.transform = "rotate(0deg)";
+        }
+      }
+    }
+
+    // 노드 선택 효과 (expand/collapse와 동시 실행)
+    const container = nodeHeader.closest("#tree-content");
+    if (container) {
+      // 기존 선택된 노드 스타일 제거
+      const prevSelected = container.querySelector(
+        ".tree-node-header.selected"
+      );
+      if (prevSelected) {
+        prevSelected.classList.remove("selected");
+        const prevDepth = parseInt(prevSelected.dataset.depth) || 0;
+        prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
+
+        // 이전 선택된 노드의 텍스트 색상도 복원
+        const prevNodeText = prevSelected.querySelector(
+          "span:not(.tree-toggle)"
+        );
+        if (prevNodeText) {
+          prevNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+        }
+      }
+
+      // 현재 노드 선택 스타일 적용
+      nodeHeader.classList.add("selected");
+      nodeHeader.dataset.depth = depth;
+      nodeHeader.style.background = "#007aff20";
+
+      // 선택된 노드의 텍스트 색상 유지
+      const selectedNodeText = nodeHeader.querySelector(
+        "span:not(.tree-toggle)"
+      );
+      if (selectedNodeText) {
+        selectedNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+      }
+    }
+
+    // Preview에서도 해당 box 선택 상태로 만들기
+    const previewBox = previewContainer.querySelector(
+      `[data-element-id="${getElementUniqueId(element)}"]`
+    );
+
+    if (previewBox) {
+      // 기존 선택된 Preview box 스타일 제거
+      const prevSelectedPreview = previewContainer.querySelector(
+        ".preview-box.selected"
+      );
+      if (prevSelectedPreview) {
+        prevSelectedPreview.classList.remove("selected");
+        prevSelectedPreview.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+        prevSelectedPreview.style.transform = "scale(1)";
+        prevSelectedPreview.style.zIndex = "";
+      }
+
+      // 현재 Preview box 선택 스타일 적용
+      previewBox.classList.add("selected");
+      previewBox.style.boxShadow = "0 0 12px rgba(0, 122, 255, 0.8)";
+      previewBox.style.transform = "scale(1.15)";
+      previewBox.style.zIndex = "1000";
+    }
+
+    // 실제 DOM 요소에 파란색 shadow 추가
+    removeAllHighlights();
+    highlightElement(element, true);
+
+    // 실제 웹사이트에서 해당 요소로 스크롤
+    element.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+  };
 }
 
 function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
@@ -408,17 +1302,18 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
     display: flex;
     align-items: center;
     margin: 4px 0;
-    padding: 8px 12px;
+    padding: 10px 14px;
     border-left: 3px solid ${getDepthColor(depth)};
     background: rgba(${getDepthRGB(depth)}, 0.08);
     border-radius: 8px;
     transition: all 0.3s ease;
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.4;
     color: ${isDarkMode ? "#f2f2f7" : "#1d1d1f"};
     border: 1px solid rgba(${getDepthRGB(depth)}, 0.2);
+    font-weight: 500;
   `;
 
   // 토글 버튼 (자식이 있을 때만)
@@ -429,27 +1324,30 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
     toggleButton.textContent = "▼"; // 기본적으로 펼쳐진 상태
     toggleButton.title = "Click to collapse/expand";
     toggleButton.style.cssText = `
-      margin-right: 8px;
-      font-size: 10px;
-      color: ${isDarkMode ? "#86868b" : "#666"};
+      margin-right: 10px;
+      font-size: 11px;
+      color: ${isDarkMode ? "#a1a1a6" : "#666"};
       transition: transform 0.2s ease, background 0.2s ease;
       user-select: none;
-      min-width: 12px;
+      min-width: 14px;
       text-align: center;
       cursor: pointer;
       border-radius: 50%;
-      padding: 2px;
+      padding: 3px;
+      font-weight: 600;
     `;
 
     // 토글 버튼 호버 효과
     toggleButton.addEventListener("mouseenter", () => {
-      toggleButton.style.background = "rgba(0, 122, 255, 0.1)";
+      toggleButton.style.background = isDarkMode
+        ? "rgba(100, 181, 246, 0.15)"
+        : "rgba(0, 122, 255, 0.1)";
       toggleButton.style.color = isDarkMode ? "#f2f2f7" : "#007aff";
     });
 
     toggleButton.addEventListener("mouseleave", () => {
       toggleButton.style.background = "transparent";
-      toggleButton.style.color = isDarkMode ? "#86868b" : "#666";
+      toggleButton.style.color = isDarkMode ? "#a1a1a6" : "#666";
     });
 
     nodeHeader.appendChild(toggleButton);
@@ -457,8 +1355,8 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
     // 자식이 없으면 빈 공간 추가 (정렬 맞춤)
     const spacer = document.createElement("span");
     spacer.style.cssText = `
-      margin-right: 20px;
-      min-width: 12px;
+      margin-right: 24px;
+      min-width: 14px;
     `;
     nodeHeader.appendChild(spacer);
   }
@@ -469,8 +1367,22 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
   nodeText.style.cssText = `
     white-space: pre-wrap;
     flex: 1;
+    color: ${isDarkMode ? "#f2f2f7" : "#1d1d1f"};
+    font-weight: 500;
   `;
   nodeHeader.appendChild(nodeText);
+
+  // 렌더링 단계를 거치는 요소들에만 badge 컨테이너 추가
+  if (shouldShowRenderingStages(element)) {
+    const badgeContainer = document.createElement("div");
+    badgeContainer.classList.add("node-badges");
+    badgeContainer.style.cssText = `
+      display: flex;
+      gap: 4px;
+      margin-left: 8px;
+    `;
+    nodeHeader.appendChild(badgeContainer);
+  }
 
   // 자식 요소들을 담을 컨테이너
   const childrenContainer = document.createElement("div");
@@ -503,6 +1415,13 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
       nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.08)`;
       nodeHeader.style.transform = "translateX(0)";
       nodeHeader.style.boxShadow = "none";
+
+      // 텍스트 색상 유지
+      const nodeTextSpan = nodeHeader.querySelector("span:not(.tree-toggle)");
+      if (nodeTextSpan) {
+        nodeTextSpan.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+      }
+
       // 하이라이트 제거
       removeHighlight(element);
     }
@@ -512,44 +1431,57 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
   nodeHeader.onclick = (e) => {
     e.stopPropagation(); // 이벤트 버블링 방지
 
-    // 토글 버튼 클릭 시 접기/펼치기
-    if (
-      hasChildren &&
-      (e.target === toggleButton || toggleButton.contains(e.target))
-    ) {
+    // 자식이 있는 노드에서 더블클릭 또는 일반 클릭 시 expand/collapse 기능
+    if (hasChildren) {
       const isExpanded =
         childrenContainer.style.maxHeight !== "0px" &&
         childrenContainer.style.maxHeight !== "";
 
+      // 더블클릭이 아닌 일반 클릭도 expand/collapse 기능으로 처리
       if (isExpanded) {
         // 접기
         childrenContainer.style.maxHeight = "0px";
         childrenContainer.style.opacity = "0";
-        toggleButton.textContent = "▶";
-        toggleButton.style.transform = "rotate(-90deg)";
+        if (toggleButton) {
+          toggleButton.textContent = "▶";
+          toggleButton.style.transform = "rotate(-90deg)";
+        }
       } else {
         // 펼치기
         childrenContainer.style.maxHeight = "none";
         childrenContainer.style.opacity = "1";
-        toggleButton.textContent = "▼";
-        toggleButton.style.transform = "rotate(0deg)";
+        if (toggleButton) {
+          toggleButton.textContent = "▼";
+          toggleButton.style.transform = "rotate(0deg)";
+        }
       }
-      return;
     }
 
-    // 일반 클릭 시 선택 효과
+    // 노드 선택 효과 (expand/collapse와 동시 실행)
     // 기존 선택된 노드 스타일 제거
     const prevSelected = container.querySelector(".tree-node-header.selected");
     if (prevSelected) {
       prevSelected.classList.remove("selected");
       const prevDepth = parseInt(prevSelected.dataset.depth) || 0;
       prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
+
+      // 이전 선택된 노드의 텍스트 색상도 복원
+      const prevNodeText = prevSelected.querySelector("span:not(.tree-toggle)");
+      if (prevNodeText) {
+        prevNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+      }
     }
 
     // 현재 노드 선택 스타일 적용
     nodeHeader.classList.add("selected");
     nodeHeader.dataset.depth = depth;
     nodeHeader.style.background = "#007aff20";
+
+    // 선택된 노드의 텍스트 색상 유지
+    const selectedNodeText = nodeHeader.querySelector("span:not(.tree-toggle)");
+    if (selectedNodeText) {
+      selectedNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+    }
 
     // Preview에서도 해당 box 선택 상태로 만들기
     const previewBox = previewContainer.querySelector(
@@ -601,21 +1533,65 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
       nodeHeader.style.transform = "translateX(0)";
     }, 50);
 
-    // 2. DOM 생성 단계 - 미리보기에 기본 박스 생성
-    if (shouldShowInPreview(element)) {
+    // 렌더링 단계를 거치는 요소들만 badge 업데이트
+    if (shouldShowRenderingStages(element)) {
+      // 1. Loaded 상태 업데이트
       setTimeout(() => {
-        createDOMPhase(element, previewContainer, depth);
-      }, 300);
+        updateNodeState(getElementUniqueId(element), "LOADED", isDarkMode);
+      }, 200);
 
-      // 3. Layout 계산 단계
-      setTimeout(() => {
-        layoutPhase(element, previewContainer, depth);
-      }, 800);
+      // 2. DOM 생성 단계 - 미리보기에 기본 박스 생성
+      if (shouldShowInPreview(element)) {
+        setTimeout(() => {
+          createDOMPhase(element, previewContainer, depth);
+          updateNodeState(getElementUniqueId(element), "PARSED", isDarkMode);
+        }, 300);
 
-      // 4. Composite 단계 (페인팅)
-      setTimeout(() => {
-        compositePhase(element, previewContainer, depth);
-      }, 1300);
+        // 3. Layout 계산 단계
+        setTimeout(() => {
+          layoutPhase(element, previewContainer, depth);
+          updateNodeState(getElementUniqueId(element), "LAYOUT", isDarkMode);
+        }, 800);
+
+        // 4. Composite 단계 (페인팅)
+        setTimeout(() => {
+          compositePhase(element, previewContainer, depth);
+          updateNodeState(
+            getElementUniqueId(element),
+            "COMPOSITED",
+            isDarkMode
+          );
+        }, 1300);
+      } else {
+        // Preview에 표시되지 않지만 렌더링 단계를 거치는 요소들
+        setTimeout(() => {
+          updateNodeState(getElementUniqueId(element), "PARSED", isDarkMode);
+        }, 300);
+        setTimeout(() => {
+          updateNodeState(getElementUniqueId(element), "LAYOUT", isDarkMode);
+        }, 800);
+        setTimeout(() => {
+          updateNodeState(
+            getElementUniqueId(element),
+            "COMPOSITED",
+            isDarkMode
+          );
+        }, 1300);
+      }
+    } else {
+      // 렌더링 단계를 거치지 않는 요소들 (script, link, meta 등)
+      // Preview에 표시되는 경우에만 미리보기 생성
+      if (shouldShowInPreview(element)) {
+        setTimeout(() => {
+          createDOMPhase(element, previewContainer, depth);
+        }, 300);
+        setTimeout(() => {
+          layoutPhase(element, previewContainer, depth);
+        }, 800);
+        setTimeout(() => {
+          compositePhase(element, previewContainer, depth);
+        }, 1300);
+      }
     }
   }, renderDelay);
 
@@ -722,30 +1698,47 @@ function shouldShowInPreview(element) {
 
 function getElementSize(element, tagName) {
   const rect = element.getBoundingClientRect();
-  const scale = 0.3; // 미리보기 창 크기에 맞게 축소
+  const scale = 0.5; // 노드 크기 증가 (0.3 -> 0.5)
 
-  let width = Math.max(20, Math.min(rect.width * scale, 100));
-  let height = Math.max(15, Math.min(rect.height * scale, 80));
+  let width = Math.max(35, Math.min(rect.width * scale, 180)); // 최소 크기와 최대 크기 증가
+  let height = Math.max(28, Math.min(rect.height * scale, 150));
 
-  // 특정 요소들의 기본 크기 설정
+  // 특정 요소들의 기본 크기 설정 (더 크게)
   switch (tagName) {
     case "img":
-      width = Math.max(width, 40);
-      height = Math.max(height, 30);
+      width = Math.max(width, 70);
+      height = Math.max(height, 55);
       break;
     case "button":
-      width = Math.max(width, 50);
-      height = Math.max(height, 25);
+      width = Math.max(width, 80);
+      height = Math.max(height, 40);
       break;
     case "input":
-      width = Math.max(width, 60);
-      height = Math.max(height, 20);
+      width = Math.max(width, 90);
+      height = Math.max(height, 35);
       break;
     case "div":
     case "section":
     case "article":
-      if (width < 30) width = 80;
-      if (height < 20) height = 40;
+      if (width < 50) width = 120;
+      if (height < 35) height = 70;
+      break;
+    case "span":
+    case "p":
+    case "h1":
+    case "h2":
+    case "h3":
+    case "h4":
+    case "h5":
+    case "h6":
+      width = Math.max(width, 60);
+      height = Math.max(height, 35);
+      break;
+    case "header":
+    case "nav":
+    case "footer":
+      width = Math.max(width, 150);
+      height = Math.max(height, 50);
       break;
   }
 
@@ -1112,22 +2105,56 @@ function createDOMPhase(element, previewContainer, depth) {
   box.setAttribute("data-element-id", getElementId(element));
   box.classList.add("preview-box", "dom-phase");
 
-  // 기본 DOM 박스 스타일 (위치 없음)
+  // 실제 요소 위치 계산 (초기 배치 위치 결정)
+  const rect = element.getBoundingClientRect();
+  const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+  const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
+  const actualX = rect.left + scrollX;
+  const actualY = rect.top + scrollY;
+
+  // Preview 영역 크기
+  const previewContent = previewContainer.querySelector("#preview-content");
+  const previewRect = previewContent
+    ? previewContent.getBoundingClientRect()
+    : { width: 440, height: 570 };
+
+  // 페이지 크기 및 스케일 계산 (layoutPhase와 동일한 로직)
+  const pageWidth = Math.max(
+    document.documentElement.scrollWidth,
+    document.documentElement.offsetWidth,
+    document.documentElement.clientWidth
+  );
+  const pageHeight = Math.max(
+    document.documentElement.scrollHeight,
+    document.documentElement.offsetHeight,
+    document.documentElement.clientHeight
+  );
+
+  const scaleX = (previewRect.width - 20) / pageWidth;
+  const scaleY = (previewRect.height - 20) / pageHeight;
+  const scale = Math.min(scaleX, scaleY, 0.7);
+
+  // 초기 위치 계산 (중앙에서 약간 오프셋)
+  const initialX = (actualX * scale + 10) * 0.8 + previewRect.width * 0.1;
+  const initialY = (actualY * scale + 10) * 0.8 + previewRect.height * 0.1;
+
+  // 기본 DOM 박스 스타일 (실제 위치 근처에서 시작)
   box.style.cssText = `
     position: absolute;
     border: 2px dashed #999;
     background-color: #f9f9f9;
-    min-width: 30px;
-    min-height: 20px;
-    font-size: 8px;
+    min-width: 45px;
+    min-height: 35px;
+    font-size: 11px;
     display: flex;
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transform: scale(0.5);
+    transform: scale(0.6);
     transition: all 0.5s ease;
-    left: 50%;
-    top: 50%;
+    left: ${initialX}px;
+    top: ${initialY}px;
     transform-origin: center;
   `;
 
@@ -1135,18 +2162,28 @@ function createDOMPhase(element, previewContainer, depth) {
   const label = document.createElement("span");
   label.textContent = getElementLabel(element, tagName);
   label.style.cssText = `
-    font-size: 6px;
+    font-size: 8px;
     color: #666;
     text-align: center;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
   box.appendChild(label);
 
-  previewContainer.appendChild(box);
+  // 스크롤 컨테이너가 있으면 그곳에 추가, 없으면 기본 컨테이너에 추가
+  const scrollContainer = previewContainer.querySelector(
+    "#preview-scroll-container"
+  );
+  if (scrollContainer) {
+    scrollContainer.appendChild(box);
+  } else {
+    previewContainer.appendChild(box);
+  }
 
   // DOM 생성 애니메이션
   setTimeout(() => {
-    box.style.opacity = "0.6";
-    box.style.transform = "scale(0.8)";
+    box.style.opacity = "0.7";
+    box.style.transform = "scale(0.9)";
   }, 100);
 }
 
@@ -1159,17 +2196,50 @@ function layoutPhase(element, previewContainer, depth) {
   box.classList.remove("dom-phase");
   box.classList.add("layout-phase");
 
-  // Layout 계산 - 실제 위치와 크기 설정
+  // Layout 계산 - 실제 위치와 크기 설정 (스크롤 위치 고려)
   const rect = element.getBoundingClientRect();
-  const scale = 0.3;
+  const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+  const scrollY = window.pageYOffset || document.documentElement.scrollTop;
 
-  let x = Math.max(5, Math.min(rect.left * scale, 400));
-  let y = Math.max(5, Math.min(rect.top * scale, 550));
+  // 실제 페이지 내에서의 절대 위치 계산
+  const actualX = rect.left + scrollX;
+  const actualY = rect.top + scrollY;
 
-  // 겹치지 않도록 조정
-  if (depth > 2) {
-    x += (depth - 2) * 10;
-    y += (depth - 2) * 8;
+  // Preview window 내부 콘텐츠 영역 크기 (헤더 제외)
+  const previewContent = previewContainer.querySelector("#preview-content");
+  const previewRect = previewContent
+    ? previewContent.getBoundingClientRect()
+    : { width: 440, height: 570 }; // 기본값 (480-40 패딩)
+
+  // 전체 페이지 크기
+  const pageWidth = Math.max(
+    document.documentElement.scrollWidth,
+    document.documentElement.offsetWidth,
+    document.documentElement.clientWidth
+  );
+  const pageHeight = Math.max(
+    document.documentElement.scrollHeight,
+    document.documentElement.offsetHeight,
+    document.documentElement.clientHeight
+  );
+
+  // 전체 페이지 크기를 preview 영역에 맞게 스케일링
+  const scaleX = (previewRect.width - 20) / pageWidth; // 10px 마진
+  const scaleY = (previewRect.height - 20) / pageHeight; // 10px 마진
+  const scale = Math.min(scaleX, scaleY, 0.7); // 최대 0.7 스케일 (노드 크기 증가)
+
+  // Preview window 내에서의 위치 계산
+  let x = actualX * scale + 10; // 10px 마진
+  let y = actualY * scale + 10; // 10px 마진
+
+  // Preview 영역 경계 확인
+  x = Math.max(5, Math.min(x, previewRect.width - 50));
+  y = Math.max(5, Math.min(y, previewRect.height - 30));
+
+  // 깊이에 따른 겹침 방지 (depth가 높을 때만)
+  if (depth > 3) {
+    x += (depth - 3) * 3;
+    y += (depth - 3) * 2;
   }
 
   const sizes = getElementSize(
@@ -1189,11 +2259,13 @@ function layoutPhase(element, previewContainer, depth) {
     opacity: 0.8;
     transform: scale(1);
     transition: all 0.5s ease;
-    font-size: 8px;
+    font-size: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     transform-origin: center;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
 }
 
@@ -1441,8 +2513,50 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
   treeNodes.forEach((node) => {
     node.style.fontFamily =
       "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif";
-    node.style.fontSize = "13px";
+    node.style.fontSize = "14px";
+    node.style.fontWeight = "500";
     node.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+
+    // 노드 텍스트 색상도 업데이트
+    const nodeTextSpans = node.querySelectorAll("span");
+    nodeTextSpans.forEach((span) => {
+      if (!span.classList.contains("tree-toggle")) {
+        span.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+        span.style.fontWeight = "500";
+      }
+    });
+
+    // 토글 버튼 색상도 업데이트
+    const toggleButton = node.querySelector(".tree-toggle");
+    if (toggleButton) {
+      toggleButton.style.color = isDarkMode ? "#a1a1a6" : "#666";
+    }
+  });
+
+  // 투명도 슬라이더 색상 업데이트
+  const opacitySliders = document.querySelectorAll(
+    "#dom-tree-visualization input[type='range'], #dom-preview-visualization input[type='range']"
+  );
+  opacitySliders.forEach((slider) => {
+    slider.style.background = isDarkMode
+      ? "rgba(255, 255, 255, 0.2)"
+      : "rgba(0, 0, 0, 0.2)";
+  });
+
+  // Badge 색상 업데이트
+  const badges = treeContainer.querySelectorAll(".node-badge");
+  badges.forEach((badge) => {
+    const state = badge.dataset.state;
+    const stateInfo = NODE_STATES[state];
+    if (stateInfo) {
+      badge.style.background = isDarkMode
+        ? `rgba(${stateInfo.color
+            .slice(1)
+            .match(/.{2}/g)
+            .map((hex) => parseInt(hex, 16))
+            .join(", ")}, 0.15)`
+        : stateInfo.bgColor;
+    }
   });
 }
 
@@ -1491,6 +2605,28 @@ function updateVisualizationTheme(isDarkMode) {
       previewContent.style.borderColor = isDarkMode
         ? "rgba(255, 255, 255, 0.1)"
         : "rgba(0, 0, 0, 0.1)";
+
+      // 페이지 가이드 테마 업데이트
+      const pageGuide = previewContent.querySelector("#page-guide");
+      if (pageGuide) {
+        pageGuide.style.borderColor = isDarkMode
+          ? "rgba(255, 255, 255, 0.2)"
+          : "rgba(0, 0, 0, 0.2)";
+        pageGuide.style.background = isDarkMode
+          ? "rgba(255, 255, 255, 0.05)"
+          : "rgba(0, 0, 0, 0.05)";
+
+        const pageInfo = pageGuide.querySelector(".page-info");
+        if (pageInfo) {
+          pageInfo.style.color = isDarkMode ? "#f2f2f7" : "#666";
+          pageInfo.style.background = isDarkMode
+            ? "rgba(28, 28, 30, 0.9)"
+            : "rgba(255, 255, 255, 0.9)";
+          pageInfo.style.borderColor = isDarkMode
+            ? "rgba(255, 255, 255, 0.1)"
+            : "rgba(0, 0, 0, 0.1)";
+        }
+      }
     }
 
     // 스크롤바 색상 업데이트
@@ -1510,6 +2646,16 @@ function updateVisualizationTheme(isDarkMode) {
         };
       }
       #tree-content::-webkit-scrollbar-thumb:hover {
+      background: ${
+        isDarkMode ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, 0.5)"
+      };
+      }
+      #preview-content::-webkit-scrollbar-thumb {
+        background: ${
+          isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+        };
+      }
+      #preview-content::-webkit-scrollbar-thumb:hover {
         background: ${
           isDarkMode ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, 0.5)"
         };
@@ -1522,6 +2668,9 @@ function updateVisualizationTheme(isDarkMode) {
 function removeExistingVisualization() {
   // 모든 하이라이트 제거
   removeAllHighlights();
+
+  // 노드 상태 초기화
+  nodeStates.clear();
 
   const existing = document.getElementById("dom-tree-visualization");
   if (existing) {

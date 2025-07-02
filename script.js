@@ -10,20 +10,31 @@ function getUrl() {
     if (tabs[0]) {
       const url = tabs[0].url;
 
-      // chrome:// URL이거나 특수 페이지인 경우 경고 표시
+      // chrome:// URL이거나 특수 페이지인 경우 에러 표시 및 URL 입력 모드 활성화
       if (
         url.startsWith("chrome://") ||
         url.startsWith("chrome-extension://") ||
         url.startsWith("edge://") ||
         url.startsWith("about:")
       ) {
-        urlElement.textContent = `⚠️ ${url}\n(브라우저 내부 페이지입니다 - 새로고침하거나 일반 웹사이트로 이동해주세요)`;
-        urlElement.style.color = "#ff6b6b";
-        urlElement.className = "url warning-url";
+        showError(
+          "브라우저 내부 페이지에서는 DOM 분석을 할 수 없습니다. 아래에 분석하고 싶은 웹사이트 URL을 입력해주세요."
+        );
+        enableUrlInput();
+
+        // URL 입력 필드에 기본값 설정
+        const urlInput = document.getElementById("url-input");
+        urlInput.value = "https://";
+        urlInput.focus();
+        urlInput.setSelectionRange(8, 8); // https:// 뒤에 커서 위치
       } else {
         urlElement.textContent = url;
         urlElement.style.color = "#86868b";
         urlElement.className = "url normal-url";
+
+        // 정상 URL인 경우 URL 입력 모드 해제
+        disableUrlInput();
+        hideError();
       }
 
       console.log(url);
@@ -33,44 +44,100 @@ function getUrl() {
 
 function showError(message) {
   const errorElement = document.getElementById("error-message");
+  const refreshBtn = document.getElementById("refresh-btn");
+  const urlWrapper = document.querySelector(".url-input-wrapper");
+  const container = document.querySelector(".container");
+
   errorElement.textContent = message;
   errorElement.style.display = "block";
+  refreshBtn.classList.add("show");
+  urlWrapper.classList.add("has-refresh");
+  container.classList.add("has-refresh-btn");
 }
 
 function hideError() {
   const errorElement = document.getElementById("error-message");
+  const refreshBtn = document.getElementById("refresh-btn");
+  const urlWrapper = document.querySelector(".url-input-wrapper");
+  const container = document.querySelector(".container");
+
   errorElement.style.display = "none";
+  refreshBtn.classList.remove("show");
+  urlWrapper.classList.remove("has-refresh");
+  container.classList.remove("has-refresh-btn");
 }
 
 function enableUrlInput() {
   const urlElement = document.getElementById("url");
   const urlInput = document.getElementById("url-input");
+  const refreshBtn = document.getElementById("refresh-btn");
 
-  // 현재 URL을 입력 필드에 설정
+  // 현재 URL을 입력 필드에 설정 (브라우저 내부 페이지가 아닌 경우에만)
   let currentUrl = urlElement.textContent;
-  if (currentUrl.startsWith("⚠️")) {
-    // 경고 메시지에서 URL 부분만 추출
-    const urlMatch = currentUrl.match(/⚠️\s*(.*?)\n/);
-    if (urlMatch) {
-      currentUrl = urlMatch[1];
-    }
-  }
 
-  urlInput.value = currentUrl;
+  // 브라우저 내부 페이지가 아니고 정상 URL인 경우에만 현재 URL 설정
+  if (
+    currentUrl &&
+    !currentUrl.startsWith("⚠️") &&
+    !currentUrl.startsWith("Loading") &&
+    currentUrl.trim() !== ""
+  ) {
+    // 정상 URL인 경우 현재 URL을 입력 필드에 설정
+    if (
+      !currentUrl.startsWith("chrome://") &&
+      !currentUrl.startsWith("chrome-extension://") &&
+      !currentUrl.startsWith("edge://") &&
+      !currentUrl.startsWith("about:")
+    ) {
+      urlInput.value = currentUrl;
+    } else {
+      // 브라우저 내부 페이지인 경우 기본값 설정
+      urlInput.value = "https://";
+    }
+  } else {
+    // 기타 경우 기본값 설정
+    urlInput.value = "https://";
+  }
 
   // 요소 전환
   urlElement.style.display = "none";
   urlInput.style.display = "block";
-  urlInput.focus();
-  urlInput.select();
+  refreshBtn.classList.add("show");
+
+  const urlWrapper = document.querySelector(".url-input-wrapper");
+  const container = document.querySelector(".container");
+  urlWrapper.classList.add("has-refresh");
+  container.classList.add("has-refresh-btn");
+
+  // 포커스 및 커서 위치 설정
+  setTimeout(() => {
+    urlInput.focus();
+    if (urlInput.value === "https://") {
+      urlInput.setSelectionRange(8, 8); // https:// 뒤에 커서 위치
+    } else {
+      urlInput.select(); // 전체 선택
+    }
+  }, 50);
 }
 
 function disableUrlInput() {
   const urlElement = document.getElementById("url");
   const urlInput = document.getElementById("url-input");
+  const refreshBtn = document.getElementById("refresh-btn");
 
   urlElement.style.display = "block";
   urlInput.style.display = "none";
+
+  // 에러가 없는 경우에만 Refresh 버튼 숨기기
+  const errorElement = document.getElementById("error-message");
+  const urlWrapper = document.querySelector(".url-input-wrapper");
+
+  if (errorElement.style.display === "none") {
+    refreshBtn.classList.remove("show");
+    urlWrapper.classList.remove("has-refresh");
+    const container = document.querySelector(".container");
+    container.classList.remove("has-refresh-btn");
+  }
 }
 
 async function navigateToUrl(url) {

@@ -217,33 +217,22 @@ function createDOMTreeVisualization() {
 function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
   if (!element || depth > 8) return; // 깊이 제한
 
+  // 시각화 창들과 그 자식 요소들은 제외
+  if (shouldSkipElement(element)) return;
+
   const nodeDiv = document.createElement("div");
   const indent = "  ".repeat(depth);
   const tagName = element.tagName
     ? element.tagName.toLowerCase()
     : element.nodeName;
 
-  // 노드 정보 생성
-  let nodeText = `${indent}├─ <${tagName}`;
-
-  // 주요 속성 표시
-  if (element.id) nodeText += ` id="${element.id}"`;
-  if (element.className)
-    nodeText += ` class="${element.className.substring(0, 20)}${
-      element.className.length > 20 ? "..." : ""
-    }"`;
-
-  nodeText += ">";
-
-  // CSS 정렬 정보 추가
-  const cssInfo = getCSSLayoutInfo(element);
-  if (cssInfo) {
-    nodeText += `\n${indent}   📐 ${cssInfo}`;
-  }
+  // 노드 정보 생성 - 태그 이름만 표시 (waterfall 스타일)
+  let nodeText = `${indent}${depth > 0 ? "├─ " : ""}${tagName}`;
 
   // 스타일 적용
-  nodeDiv.innerHTML = nodeText.replace(/\n/g, "<br>");
+  nodeDiv.innerHTML = nodeText;
   nodeDiv.classList.add("tree-node");
+  nodeDiv.dataset.elementId = getElementUniqueId(element); // 고유 ID 저장
   nodeDiv.style.cssText = `
     margin: 4px 0;
     padding: 8px 12px;
@@ -265,22 +254,71 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
     nodeDiv.style.background = `rgba(${getDepthRGB(depth)}, 0.15)`;
     nodeDiv.style.transform = "translateX(4px)";
     nodeDiv.style.boxShadow = `0 2px 8px rgba(${getDepthRGB(depth)}, 0.3)`;
-    // 실제 DOM 요소 하이라이트
-    if (element.style) {
-      element.style.outline = `2px solid ${getDepthColor(depth)}`;
-      element.style.outlineOffset = "2px";
-    }
+    // 실제 DOM 요소에 파란색 dashed border 추가
+    highlightElement(element, true);
   };
 
   nodeDiv.onmouseleave = () => {
-    nodeDiv.style.background = `rgba(${getDepthRGB(depth)}, 0.08)`;
-    nodeDiv.style.transform = "translateX(0)";
-    nodeDiv.style.boxShadow = "none";
-    // 하이라이트 제거
-    if (element.style) {
-      element.style.outline = "";
-      element.style.outlineOffset = "";
+    // 선택된 상태가 아닐 때만 스타일 제거
+    if (!nodeDiv.classList.contains("selected")) {
+      nodeDiv.style.background = `rgba(${getDepthRGB(depth)}, 0.08)`;
+      nodeDiv.style.transform = "translateX(0)";
+      nodeDiv.style.boxShadow = "none";
+      // 하이라이트 제거
+      removeHighlight(element);
     }
+  };
+
+  // 클릭 효과
+  nodeDiv.onclick = () => {
+    // 기존 선택된 노드 스타일 제거
+    const prevSelected = container.querySelector(".tree-node.selected");
+    if (prevSelected) {
+      prevSelected.classList.remove("selected");
+      prevSelected.style.background = `rgba(${getDepthRGB(
+        parseInt(prevSelected.dataset.depth) || 0
+      )}, 0.08)`;
+    }
+
+    // 현재 노드 선택 스타일 적용
+    nodeDiv.classList.add("selected");
+    nodeDiv.dataset.depth = depth;
+    nodeDiv.style.background = "#007aff20";
+
+    // Preview에서도 해당 box 선택 상태로 만들기
+    const previewBox = previewContainer.querySelector(
+      `[data-element-id="${getElementUniqueId(element)}"]`
+    );
+
+    if (previewBox) {
+      // 기존 선택된 Preview box 스타일 제거
+      const prevSelectedPreview = previewContainer.querySelector(
+        ".preview-box.selected"
+      );
+      if (prevSelectedPreview) {
+        prevSelectedPreview.classList.remove("selected");
+        prevSelectedPreview.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+        prevSelectedPreview.style.transform = "scale(1)";
+        prevSelectedPreview.style.zIndex = "";
+      }
+
+      // 현재 Preview box 선택 스타일 적용
+      previewBox.classList.add("selected");
+      previewBox.style.boxShadow = "0 0 12px rgba(0, 122, 255, 0.8)";
+      previewBox.style.transform = "scale(1.15)";
+      previewBox.style.zIndex = "1000";
+    }
+
+    // 실제 DOM 요소에 파란색 shadow 추가
+    removeAllHighlights();
+    highlightElement(element, true);
+
+    // 실제 웹사이트에서 해당 요소로 스크롤
+    element.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
   };
 
   container.appendChild(nodeDiv);
@@ -315,8 +353,10 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
     }
   }, renderDelay);
 
-  // 자식 요소들 처리
-  const children = Array.from(element.children || []);
+  // 자식 요소들 처리 (시각화 창 요소들은 제외)
+  const children = Array.from(element.children || []).filter(
+    (child) => !shouldSkipElement(child)
+  );
   children.forEach((child, index) => {
     setTimeout(() => {
       buildDOMTree(child, container, previewContainer, depth + 1, isDarkMode);
@@ -324,63 +364,15 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
   });
 }
 
-function createPreviewBox(element, depth) {
-  if (!shouldShowInPreview(element)) return null;
+function shouldSkipElement(element) {
+  if (!element || !element.tagName) return true;
 
-  const box = document.createElement("div");
-  const tagName = element.tagName
-    ? element.tagName.toLowerCase()
-    : element.nodeName;
-
-  // 기본 박스 스타일
-  box.style.cssText = `
-    position: absolute;
-    border: 1px solid black;
-    background-color: white;
-    min-width: 20px;
-    min-height: 15px;
-    font-size: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.5s ease;
-    opacity: 0;
-    transform: scale(0.8);
-  `;
-
-  // 요소 타입별 초기 크기 설정
-  const sizes = getElementSize(element, tagName);
-  box.style.width = sizes.width;
-  box.style.height = sizes.height;
-
-  // 텍스트 내용 추가
-  const label = document.createElement("span");
-  label.textContent = getElementLabel(element, tagName);
-  label.style.cssText = `
-    font-size: 6px;
-    color: #666;
-    text-align: center;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  `;
-  box.appendChild(label);
-
-  return box;
-}
-
-function shouldShowInPreview(element) {
-  if (!element.tagName) return false;
-
-  const tagName = element.tagName.toLowerCase();
-  const skipTags = ["script", "style", "meta", "link", "title", "head"];
-
-  // 시각화 창들은 미리보기에서 제외
+  // 시각화 창들은 DOM 트리에서 제외
   if (
     element.id === "dom-tree-visualization" ||
     element.id === "dom-preview-visualization"
   ) {
-    return false;
+    return true;
   }
 
   // 시각화 창의 자식 요소들도 제외
@@ -390,9 +382,23 @@ function shouldShowInPreview(element) {
       parent.id === "dom-tree-visualization" ||
       parent.id === "dom-preview-visualization"
     ) {
-      return false;
+      return true;
     }
     parent = parent.parentElement;
+  }
+
+  return false;
+}
+
+function shouldShowInPreview(element) {
+  if (!element.tagName) return false;
+
+  const tagName = element.tagName.toLowerCase();
+  const skipTags = ["script", "style", "meta", "link", "title", "head"];
+
+  // 시각화 창들 관련 요소들은 미리보기에서 제외
+  if (shouldSkipElement(element)) {
+    return false;
   }
 
   return !skipTags.includes(tagName);
@@ -921,7 +927,74 @@ function compositePhase(element, previewContainer, depth) {
     background-color: ${backgroundColor};
     opacity: 1;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
   `;
+
+  // 고유 ID 저장
+  box.dataset.elementId = getElementUniqueId(element);
+
+  // Preview box 이벤트 핸들러 추가
+  box.onmouseenter = () => {
+    // 클릭된 상태가 아닐 때만 hover 효과 적용
+    if (!box.classList.contains("selected")) {
+      box.style.boxShadow = "0 0 8px rgba(0, 122, 255, 0.6)";
+      box.style.transform = "scale(1.1)";
+      box.style.zIndex = "1000";
+
+      // 실제 DOM 요소에 파란색 dashed border 추가 (hover용)
+      highlightElement(element, true);
+
+      // DOM Structure에서 해당 노드 하이라이트
+      highlightCorrespondingTreeNode(element);
+    }
+  };
+
+  box.onmouseleave = () => {
+    // 클릭된 상태가 아닐 때만 hover 효과 제거
+    if (!box.classList.contains("selected")) {
+      box.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+      box.style.transform = "scale(1)";
+      box.style.zIndex = "";
+
+      // 하이라이트 제거 (hover용)
+      removeHighlight(element);
+      removeTreeNodeHighlight();
+    }
+  };
+
+  // Preview box 클릭 효과
+  box.onclick = () => {
+    // 기존 선택된 Preview box 스타일 제거
+    const prevSelectedPreview = previewContainer.querySelector(
+      ".preview-box.selected"
+    );
+    if (prevSelectedPreview) {
+      prevSelectedPreview.classList.remove("selected");
+      prevSelectedPreview.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+      prevSelectedPreview.style.transform = "scale(1)";
+      prevSelectedPreview.style.zIndex = "";
+    }
+
+    // 현재 Preview box 선택 스타일 적용
+    box.classList.add("selected");
+    box.style.boxShadow = "0 0 12px rgba(0, 122, 255, 0.8)";
+    box.style.transform = "scale(1.15)";
+    box.style.zIndex = "1000";
+
+    // 모든 기존 하이라이트 제거 후 새로운 하이라이트 적용
+    removeAllHighlights();
+    highlightElement(element, true);
+
+    // 실제 웹사이트에서 해당 요소로 스크롤
+    element.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+
+    // DOM Structure에서 해당 노드로 스크롤하고 선택
+    scrollToAndSelectTreeNode(element);
+  };
 }
 
 function getElementId(element) {
@@ -1520,7 +1593,7 @@ function visualizeDOMConstruction() {
             node.nodeType === Node.ELEMENT_NODE &&
             !processedNodes.has(node)
           ) {
-            highlightElement(node);
+            highlightElementWithColor(node);
             processedNodes.add(node);
           }
         });
@@ -1533,7 +1606,7 @@ function visualizeDOMConstruction() {
   allElements.forEach((element, index) => {
     setTimeout(() => {
       if (!processedNodes.has(element)) {
-        highlightElement(element);
+        highlightElementWithColor(element);
         processedNodes.add(element);
       }
     }, index * 50); // 50ms 간격으로 순차적 시각화
@@ -1552,7 +1625,7 @@ function visualizeDOMConstruction() {
   }, allElements.length * 50 + 1000);
 }
 
-function highlightElement(element) {
+function highlightElementWithColor(element) {
   const color = visualizationColors[colorIndex % visualizationColors.length];
   colorIndex++;
 
@@ -1624,3 +1697,204 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+// 요소에 고유 ID 생성/할당
+function getElementUniqueId(element) {
+  if (!element.dataset.uniqueId) {
+    element.dataset.uniqueId =
+      "elem_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+  }
+  return element.dataset.uniqueId;
+}
+
+// 요소에 파란색 shadow 하이라이트 추가 (기존 스타일 보존)
+function highlightElement(element, isDashed = false) {
+  if (!element || !element.style) {
+    return;
+  }
+
+  // 시각화 창 요소들은 하이라이트하지 않음
+  if (shouldSkipElement(element)) {
+    return;
+  }
+
+  // 기존 box-shadow 저장 (있는 경우)
+  if (!element.dataset.originalBoxShadow) {
+    element.dataset.originalBoxShadow = element.style.boxShadow || "none";
+  }
+
+  if (isDashed) {
+    // 기존 shadow에 파란색 shadow 추가
+    const originalShadow = element.dataset.originalBoxShadow;
+    const highlightShadow =
+      "0 0 12px rgba(0, 122, 255, 0.6), 0 0 24px rgba(0, 122, 255, 0.3)";
+
+    if (originalShadow && originalShadow !== "none") {
+      element.style.boxShadow = `${originalShadow}, ${highlightShadow}`;
+    } else {
+      element.style.boxShadow = highlightShadow;
+    }
+
+    // 약간의 z-index 조정으로 가시성 확보
+    if (!element.dataset.originalZIndex) {
+      element.dataset.originalZIndex = element.style.zIndex || "auto";
+    }
+    element.style.zIndex = (parseInt(element.style.zIndex) || 0) + 10;
+  } else {
+    element.style.outline = "2px solid #007aff";
+    element.style.outlineOffset = "2px";
+  }
+}
+
+// 하이라이트 제거 (원래 스타일 복원)
+function removeHighlight(element) {
+  if (!element || !element.style) return;
+
+  // 원래 box-shadow 복원
+  if (element.dataset.originalBoxShadow) {
+    if (element.dataset.originalBoxShadow === "none") {
+      element.style.boxShadow = "";
+    } else {
+      element.style.boxShadow = element.dataset.originalBoxShadow;
+    }
+    delete element.dataset.originalBoxShadow;
+  }
+
+  // 원래 z-index 복원
+  if (element.dataset.originalZIndex) {
+    if (element.dataset.originalZIndex === "auto") {
+      element.style.zIndex = "";
+    } else {
+      element.style.zIndex = element.dataset.originalZIndex;
+    }
+    delete element.dataset.originalZIndex;
+  }
+
+  // outline 제거
+  element.style.outline = "";
+  element.style.outlineOffset = "";
+}
+
+// 모든 하이라이트 제거 (원래 스타일 복원)
+function removeAllHighlights() {
+  document.querySelectorAll("*").forEach((el) => {
+    if (
+      el.style &&
+      !el.closest("#dom-tree-visualization") &&
+      !el.closest("#dom-preview-visualization")
+    ) {
+      // 하이라이트된 요소만 처리
+      if (
+        el.dataset.originalBoxShadow ||
+        el.dataset.originalZIndex ||
+        (el.style.outline && el.style.outline.includes("#007aff"))
+      ) {
+        removeHighlight(el);
+      }
+    }
+  });
+}
+
+// DOM Structure에서 해당 노드 하이라이트
+function highlightCorrespondingTreeNode(element) {
+  const elementId = getElementUniqueId(element);
+  const treeContainer = document.getElementById("tree-content");
+  if (!treeContainer) return;
+
+  const treeNode = treeContainer.querySelector(
+    `[data-element-id="${elementId}"]`
+  );
+  if (treeNode) {
+    treeNode.style.background = "#007aff20";
+    treeNode.style.transform = "translateX(4px)";
+    treeNode.style.boxShadow = "0 2px 8px rgba(0, 122, 255, 0.3)";
+  }
+}
+
+// DOM Structure에서 노드 하이라이트 제거
+function removeTreeNodeHighlight() {
+  const treeContainer = document.getElementById("tree-content");
+  if (!treeContainer) return;
+
+  const highlightedNodes = treeContainer.querySelectorAll(
+    ".tree-node:not(.selected)"
+  );
+  highlightedNodes.forEach((node) => {
+    const depth = parseInt(node.dataset.depth) || 0;
+    node.style.background = `rgba(${getDepthRGB(depth)}, 0.08)`;
+    node.style.transform = "translateX(0)";
+    node.style.boxShadow = "none";
+  });
+}
+
+// DOM Structure에서 해당 노드로 스크롤하고 선택
+function scrollToAndSelectTreeNode(element) {
+  const elementId = getElementUniqueId(element);
+  const treeContainer = document.getElementById("tree-content");
+  const previewContainer = document.getElementById("dom-preview-visualization");
+
+  if (!treeContainer) return;
+
+  const treeNode = treeContainer.querySelector(
+    `[data-element-id="${elementId}"]`
+  );
+
+  if (treeNode) {
+    // 기존 선택된 노드 스타일 제거
+    const prevSelected = treeContainer.querySelector(".tree-node.selected");
+    if (prevSelected) {
+      prevSelected.classList.remove("selected");
+      const prevDepth = parseInt(prevSelected.dataset.depth) || 0;
+      prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
+    }
+
+    // 현재 노드 선택 스타일 적용
+    treeNode.classList.add("selected");
+    treeNode.style.background = "#007aff20";
+
+    // 스크롤하여 노드가 보이도록 함
+    treeNode.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+
+    // 잠시 깜빡이는 효과
+    let flashCount = 0;
+    const flashInterval = setInterval(() => {
+      treeNode.style.background =
+        flashCount % 2 === 0 ? "#007aff40" : "#007aff20";
+      flashCount++;
+      if (flashCount >= 6) {
+        clearInterval(flashInterval);
+        treeNode.style.background = "#007aff20";
+      }
+    }, 200);
+  }
+
+  // Preview에서도 해당 box 선택 상태로 만들기
+  if (previewContainer) {
+    const previewBox = previewContainer.querySelector(
+      `[data-element-id="${elementId}"]`
+    );
+
+    if (previewBox) {
+      // 기존 선택된 Preview box 스타일 제거
+      const prevSelectedPreview = previewContainer.querySelector(
+        ".preview-box.selected"
+      );
+      if (prevSelectedPreview) {
+        prevSelectedPreview.classList.remove("selected");
+        prevSelectedPreview.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+        prevSelectedPreview.style.transform = "scale(1)";
+        prevSelectedPreview.style.zIndex = "";
+      }
+
+      // 현재 Preview box 선택 스타일 적용
+      previewBox.classList.add("selected");
+      previewBox.style.boxShadow = "0 0 12px rgba(0, 122, 255, 0.8)";
+      previewBox.style.transform = "scale(1.15)";
+      previewBox.style.zIndex = "1000";
+    }
+  }
+}

@@ -18,7 +18,9 @@ function getUrl() {
         url.startsWith("about:")
       ) {
         showError(
-          "브라우저 내부 페이지에서는 DOM 분석을 할 수 없습니다. 아래에 분석하고 싶은 웹사이트 URL을 입력해주세요."
+          `브라우저 내부 페이지에서는 DOM 분석을 할 수 없습니다.
+          <br />
+          상단에 있는 URL 입력 필드에 분석하고 싶은 웹사이트 URL을 입력해주세요.`
         );
         enableUrlInput();
 
@@ -169,6 +171,13 @@ async function navigateToUrl(url) {
 
 function refreshUrl() {
   const refreshBtn = document.getElementById("refresh-btn");
+  const urlInput = document.getElementById("url-input");
+
+  // URL 입력 모드인 경우 URL 이동 처리 (Enter 키와 동일한 동작)
+  if (urlInput.style.display !== "none") {
+    handleButtonClick(); // URL 이동 로직 실행
+    return;
+  }
 
   // 새로고침 애니메이션
   refreshBtn.style.transform = "translateY(-50%) rotate(180deg)";
@@ -264,9 +273,10 @@ async function handleButtonClick() {
       // 페이지 로드 완료 대기
       await waitForPageLoad(tab.id);
 
-      // DOM 트리 시각화 시작
+      // DOM 트리 시각화 시작 (현재 다크모드 상태 전달)
       await chrome.tabs.sendMessage(tab.id, {
         action: "startDOMTreeVisualization",
+        isDarkMode: isDarkMode,
       });
 
       // 시각화 완료 대기
@@ -280,11 +290,6 @@ async function handleButtonClick() {
       button.disabled = false;
       refreshBtn.disabled = false;
       refreshBtn.style.opacity = "1";
-
-      // GIF 버튼 활성화 메시지 전송
-      await chrome.tabs.sendMessage(tab.id, {
-        action: "enableGifCapture",
-      });
     }
   } catch (error) {
     console.error("오류 발생:", error);
@@ -341,6 +346,39 @@ function waitForPreviewComplete() {
   });
 }
 
+// 다크모드 상태 관리
+let isDarkMode = false;
+
+// 다크모드 토글 함수
+function toggleDarkMode() {
+  isDarkMode = !isDarkMode;
+  const themeToggle = document.getElementById("theme-toggle");
+
+  if (isDarkMode) {
+    document.body.classList.add("dark-mode");
+    themeToggle.textContent = "☀️";
+    themeToggle.title = "Toggle Light Mode";
+  } else {
+    document.body.classList.remove("dark-mode");
+    themeToggle.textContent = "🌙";
+    themeToggle.title = "Toggle Dark Mode";
+  }
+
+  // 시각화 창이 열려있으면 테마 업데이트 메시지 전송
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    if (tabs[0]) {
+      chrome.tabs
+        .sendMessage(tabs[0].id, {
+          action: "updateTheme",
+          isDarkMode: isDarkMode,
+        })
+        .catch(() => {
+          // 시각화 창이 없으면 무시
+        });
+    }
+  });
+}
+
 console.log("11");
 
 getUrl();
@@ -350,9 +388,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const button = document.getElementById("btn");
   const refreshBtn = document.getElementById("refresh-btn");
   const urlInput = document.getElementById("url-input");
+  const themeToggle = document.getElementById("theme-toggle");
 
   button.addEventListener("click", handleButtonClick);
   refreshBtn.addEventListener("click", refreshUrl);
+  themeToggle.addEventListener("click", toggleDarkMode);
 
   // URL 입력 필드에서 Enter 키 처리
   urlInput.addEventListener("keypress", function (event) {

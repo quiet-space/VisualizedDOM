@@ -69,6 +69,35 @@
         text-align: center;
       }
 
+      .theme-toggle {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.05);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        color: #1d1d1f;
+        z-index: 10;
+      }
+
+      .theme-toggle:hover {
+        background: rgba(0, 0, 0, 0.08);
+        transform: scale(1.05);
+      }
+
+      .theme-toggle:active {
+        transform: scale(0.95);
+      }
+
       .url-container {
         position: relative;
         margin-bottom: 25px;
@@ -341,6 +370,16 @@
           color: #f2f2f7;
         }
 
+        .theme-toggle {
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.2);
+          color: #f2f2f7;
+        }
+
+        .theme-toggle:hover {
+          background: rgba(255, 255, 255, 0.15);
+        }
+
         p.url {
           color: #98989d;
           background: rgba(255, 255, 255, 0.05);
@@ -419,11 +458,112 @@
       button#btn:disabled {
         animation: pulse 1.5s ease-in-out infinite;
       }
+
+      /* 다크모드 수동 토글 */
+      body.dark-mode {
+        background: linear-gradient(135deg, #1c1c1e 0%, #2c2c2e 100%);
+      }
+
+      body.dark-mode .container {
+        background: rgba(28, 28, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #f2f2f7;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3),
+          0 10px 20px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+
+      body.dark-mode .container:hover {
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4),
+          0 15px 30px rgba(0, 0, 0, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      }
+
+      body.dark-mode .title {
+        color: #f2f2f7;
+      }
+
+      body.dark-mode .theme-toggle {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: #f2f2f7;
+      }
+
+      body.dark-mode .theme-toggle:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      body.dark-mode p.url {
+        color: #98989d;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      body.dark-mode p.url:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #aeaeb2;
+      }
+
+      body.dark-mode .refresh-btn {
+        background: rgba(0, 122, 255, 0.15);
+        border-color: rgba(0, 122, 255, 0.3);
+        color: #64b5f6;
+      }
+
+      body.dark-mode .refresh-btn:hover {
+        background: rgba(0, 122, 255, 0.25);
+        border-color: rgba(0, 122, 255, 0.4);
+        transform: translateY(-50%);
+      }
+
+      body.dark-mode .refresh-btn:active {
+        background: rgba(0, 122, 255, 0.3);
+        border-color: rgba(0, 122, 255, 0.5);
+        transform: translateY(-50%);
+      }
+
+      body.dark-mode .refresh-btn:disabled {
+        background: rgba(0, 122, 255, 0.1);
+        border-color: rgba(0, 122, 255, 0.2);
+        color: rgba(100, 181, 246, 0.5);
+        cursor: not-allowed;
+        transform: translateY(-50%);
+      }
+
+      body.dark-mode .url-input {
+        color: #f2f2f7;
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+
+      body.dark-mode .url-input:focus {
+        border-color: #64b5f6;
+        background: rgba(100, 181, 246, 0.1);
+        box-shadow: 0 0 0 3px rgba(100, 181, 246, 0.2);
+      }
+
+      body.dark-mode .error-message {
+        background: rgba(255, 59, 48, 0.15);
+        border-color: rgba(255, 59, 48, 0.3);
+        color: #ff6b6b;
+      }
+
+      body.dark-mode p.url.normal-url::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      body.dark-mode p.url.normal-url::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.4);
+      }
     </style>
   </head>
   <body>
     <div class="container">
       <div class="title">DOM Tree Visualizer</div>
+
+      <!-- 다크모드 토글 버튼 -->
+      <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode">
+        🌙
+      </button>
       <div class="url-container">
         <div class="url-input-wrapper">
           <input

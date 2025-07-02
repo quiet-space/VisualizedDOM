@@ -16,15 +16,33 @@ let processedNodes = new Set();
 // 확장 프로그램으로부터 메시지 수신
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "startDOMTreeVisualization") {
-    startDOMTreeVisualization(request.isDarkMode || false);
+    startDOMTreeVisualization(
+      request.isDarkMode || false,
+      request.windowStates || { previewWindow: true, treeWindow: true }
+    );
     sendResponse({ success: true });
   } else if (request.action === "updateTheme") {
     updateVisualizationTheme(request.isDarkMode);
     sendResponse({ success: true });
+  } else if (request.action === "showPreviewWindow") {
+    showPreviewWindow(request.isDarkMode || false);
+    sendResponse({ success: true });
+  } else if (request.action === "hidePreviewWindow") {
+    hidePreviewWindow();
+    sendResponse({ success: true });
+  } else if (request.action === "showTreeWindow") {
+    showTreeWindow(request.isDarkMode || false);
+    sendResponse({ success: true });
+  } else if (request.action === "hideTreeWindow") {
+    hideTreeWindow();
+    sendResponse({ success: true });
   }
 });
 
-function startDOMTreeVisualization(initialDarkMode = false) {
+function startDOMTreeVisualization(
+  initialDarkMode = false,
+  windowStates = { previewWindow: true, treeWindow: true }
+) {
   if (isVisualizationActive) return;
 
   isVisualizationActive = true;
@@ -33,10 +51,13 @@ function startDOMTreeVisualization(initialDarkMode = false) {
   removeExistingVisualization();
 
   // DOM 트리 시각화 컨테이너 생성
-  createDOMTreeVisualization(initialDarkMode);
+  createDOMTreeVisualization(initialDarkMode, windowStates);
 }
 
-function createDOMTreeVisualization(initialDarkMode = false) {
+function createDOMTreeVisualization(
+  initialDarkMode = false,
+  windowStates = { previewWindow: true, treeWindow: true }
+) {
   // 다크모드 상태 관리
   let isDarkMode = initialDarkMode;
 
@@ -319,6 +340,14 @@ function createDOMTreeVisualization(initialDarkMode = false) {
 
   document.body.appendChild(treeContainer);
   document.body.appendChild(previewContainer);
+
+  // 윈도우 상태에 따라 표시/숨김 설정
+  if (!windowStates.treeWindow) {
+    treeContainer.style.display = "none";
+  }
+  if (!windowStates.previewWindow) {
+    previewContainer.style.display = "none";
+  }
 
   // 드래그 기능 추가
   makeDraggable(treeContainer, title);
@@ -741,8 +770,8 @@ function layoutPreviewBox(box, element, depth) {
   const rect = element.getBoundingClientRect();
   const scale = 0.3;
 
-  let x = Math.max(5, Math.min(rect.left * scale, 250));
-  let y = Math.max(5, Math.min(rect.top * scale, 350));
+  let x = Math.max(5, Math.min(rect.left * scale, 400));
+  let y = Math.max(5, Math.min(rect.top * scale, 550));
 
   // 겹치지 않도록 조정
   if (depth > 2) {
@@ -1134,8 +1163,8 @@ function layoutPhase(element, previewContainer, depth) {
   const rect = element.getBoundingClientRect();
   const scale = 0.3;
 
-  let x = Math.max(5, Math.min(rect.left * scale, 250));
-  let y = Math.max(5, Math.min(rect.top * scale, 350));
+  let x = Math.max(5, Math.min(rect.left * scale, 400));
+  let y = Math.max(5, Math.min(rect.top * scale, 550));
 
   // 겹치지 않도록 조정
   if (depth > 2) {
@@ -1369,9 +1398,9 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
   previewContainer.style.cssText = `
     position: fixed;
     top: 20px;
-    right: 460px;
-    width: 380px;
-    height: 520px;
+    right: 520px;
+    width: 480px;
+    height: 650px;
     background: ${previewTheme.background};
     backdrop-filter: blur(20px);
     color: ${previewTheme.color};
@@ -1637,6 +1666,49 @@ document.addEventListener("visibilitychange", () => {
     removeAllHighlights();
   }
 });
+
+// 윈도우 표시/숨김 함수들
+function showPreviewWindow(isDarkMode = false) {
+  let previewContainer = document.getElementById("dom-preview-visualization");
+
+  if (!previewContainer && isVisualizationActive) {
+    // 시각화가 활성화되어 있지만 Preview window가 없으면 다시 생성
+    startDOMTreeVisualization(isDarkMode, {
+      previewWindow: true,
+      treeWindow: false,
+    });
+  } else if (previewContainer) {
+    previewContainer.style.display = "flex";
+  }
+}
+
+function hidePreviewWindow() {
+  const previewContainer = document.getElementById("dom-preview-visualization");
+  if (previewContainer) {
+    previewContainer.style.display = "none";
+  }
+}
+
+function showTreeWindow(isDarkMode = false) {
+  let treeContainer = document.getElementById("dom-tree-visualization");
+
+  if (!treeContainer && isVisualizationActive) {
+    // 시각화가 활성화되어 있지만 Tree window가 없으면 다시 생성
+    startDOMTreeVisualization(isDarkMode, {
+      previewWindow: false,
+      treeWindow: true,
+    });
+  } else if (treeContainer) {
+    treeContainer.style.display = "flex";
+  }
+}
+
+function hideTreeWindow() {
+  const treeContainer = document.getElementById("dom-tree-visualization");
+  if (treeContainer) {
+    treeContainer.style.display = "none";
+  }
+}
 
 // 요소에 고유 ID 생성/할당
 function getElementUniqueId(element) {

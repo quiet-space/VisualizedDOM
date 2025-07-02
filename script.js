@@ -273,10 +273,11 @@ async function handleButtonClick() {
       // 페이지 로드 완료 대기
       await waitForPageLoad(tab.id);
 
-      // DOM 트리 시각화 시작 (현재 다크모드 상태 전달)
+      // DOM 트리 시각화 시작 (현재 다크모드 상태와 윈도우 상태 전달)
       await chrome.tabs.sendMessage(tab.id, {
         action: "startDOMTreeVisualization",
         isDarkMode: isDarkMode,
+        windowStates: windowStates,
       });
 
       // 시각화 완료 대기
@@ -348,6 +349,12 @@ function waitForPreviewComplete() {
 // 다크모드 상태 관리
 let isDarkMode = false;
 
+// 윈도우 상태 관리
+let windowStates = {
+  previewWindow: true, // Layout & Preview 윈도우
+  treeWindow: true, // DOM Structure 윈도우
+};
+
 // 다크모드 토글 함수
 function toggleDarkMode() {
   isDarkMode = !isDarkMode;
@@ -378,9 +385,112 @@ function toggleDarkMode() {
   });
 }
 
+// 윈도우 토글 함수들
+function togglePreviewWindow() {
+  windowStates.previewWindow = !windowStates.previewWindow;
+  const btn = document.getElementById("preview-window-btn");
+
+  if (windowStates.previewWindow) {
+    btn.classList.add("active");
+  } else {
+    btn.classList.remove("active");
+  }
+
+  // 윈도우가 활성화되고 이미 시각화가 실행 중이면 즉시 윈도우 표시
+  if (windowStates.previewWindow) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs[0]) {
+        chrome.tabs
+          .sendMessage(tabs[0].id, {
+            action: "showPreviewWindow",
+            isDarkMode: isDarkMode,
+          })
+          .catch(() => {
+            // 시각화가 실행되지 않았으면 무시
+          });
+      }
+    });
+  } else {
+    // 윈도우 비활성화 시 숨기기
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs[0]) {
+        chrome.tabs
+          .sendMessage(tabs[0].id, {
+            action: "hidePreviewWindow",
+          })
+          .catch(() => {
+            // 시각화가 실행되지 않았으면 무시
+          });
+      }
+    });
+  }
+}
+
+function toggleTreeWindow() {
+  windowStates.treeWindow = !windowStates.treeWindow;
+  const btn = document.getElementById("tree-window-btn");
+
+  if (windowStates.treeWindow) {
+    btn.classList.add("active");
+  } else {
+    btn.classList.remove("active");
+  }
+
+  // 윈도우가 활성화되고 이미 시각화가 실행 중이면 즉시 윈도우 표시
+  if (windowStates.treeWindow) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs[0]) {
+        chrome.tabs
+          .sendMessage(tabs[0].id, {
+            action: "showTreeWindow",
+            isDarkMode: isDarkMode,
+          })
+          .catch(() => {
+            // 시각화가 실행되지 않았으면 무시
+          });
+      }
+    });
+  } else {
+    // 윈도우 비활성화 시 숨기기
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs[0]) {
+        chrome.tabs
+          .sendMessage(tabs[0].id, {
+            action: "hideTreeWindow",
+          })
+          .catch(() => {
+            // 시각화가 실행되지 않았으면 무시
+          });
+      }
+    });
+  }
+}
+
 console.log("11");
 
 getUrl();
+
+// 윈도우 버튼 상태 초기화
+function initializeWindowButtons() {
+  const previewBtn = document.getElementById("preview-window-btn");
+  const treeBtn = document.getElementById("tree-window-btn");
+
+  if (previewBtn) {
+    if (windowStates.previewWindow) {
+      previewBtn.classList.add("active");
+    } else {
+      previewBtn.classList.remove("active");
+    }
+  }
+
+  if (treeBtn) {
+    if (windowStates.treeWindow) {
+      treeBtn.classList.add("active");
+    } else {
+      treeBtn.classList.remove("active");
+    }
+  }
+}
 
 // 버튼 클릭 이벤트 리스너 추가
 document.addEventListener("DOMContentLoaded", function () {
@@ -388,10 +498,17 @@ document.addEventListener("DOMContentLoaded", function () {
   const refreshBtn = document.getElementById("refresh-btn");
   const urlInput = document.getElementById("url-input");
   const themeToggle = document.getElementById("theme-toggle");
+  const previewWindowBtn = document.getElementById("preview-window-btn");
+  const treeWindowBtn = document.getElementById("tree-window-btn");
 
   button.addEventListener("click", handleButtonClick);
   refreshBtn.addEventListener("click", refreshUrl);
   themeToggle.addEventListener("click", toggleDarkMode);
+  previewWindowBtn.addEventListener("click", togglePreviewWindow);
+  treeWindowBtn.addEventListener("click", toggleTreeWindow);
+
+  // 윈도우 버튼 상태 초기화
+  initializeWindowButtons();
 
   // URL 입력 필드에서 Enter 키 처리
   urlInput.addEventListener("keypress", function (event) {

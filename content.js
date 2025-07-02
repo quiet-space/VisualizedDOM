@@ -1743,17 +1743,25 @@ function shouldShowInPreview(element) {
     return false;
   }
 
-  // 화면 영역 밖에 완전히 벗어난 요소 제외
-  const viewport = {
-    width: window.innerWidth,
-    height: window.innerHeight,
-  };
+  // 화면 영역 밖에 완전히 벗어난 요소 제외 (페이지 내 모든 요소 표시를 위해 완화)
+  // 페이지 전체 크기를 기준으로 완전히 벗어난 요소만 제외
+  const pageWidth = Math.max(
+    document.documentElement.scrollWidth,
+    document.documentElement.offsetWidth,
+    document.documentElement.clientWidth
+  );
+  const pageHeight = Math.max(
+    document.documentElement.scrollHeight,
+    document.documentElement.offsetHeight,
+    document.documentElement.clientHeight
+  );
 
+  // 페이지 전체 영역을 벗어난 요소만 제외 (viewport 기준에서 페이지 기준으로 변경)
   if (
-    rect.right < 0 ||
-    rect.bottom < 0 ||
-    rect.left > viewport.width ||
-    rect.top > viewport.height
+    rect.right < -100 || // 좌측으로 완전히 벗어난 경우
+    rect.bottom < -100 || // 상단으로 완전히 벗어난 경우
+    rect.left > pageWidth + 100 || // 우측으로 완전히 벗어난 경우
+    rect.top > pageHeight + 100 // 하단으로 완전히 벗어난 경우
   ) {
     return false;
   }

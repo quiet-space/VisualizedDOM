@@ -45,6 +45,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === "hideTreeWindow") {
     hideTreeWindow();
     sendResponse({ success: true });
+  } else if (request.action === "changeWindowOpacity") {
+    changeWindowOpacity(request.opacity);
+    sendResponse({ success: true });
   }
 });
 
@@ -169,77 +172,7 @@ function createDOMTreeVisualization(
     }
   };
 
-  // 투명도 조절 슬라이더 추가
-  const opacityControl = document.createElement("div");
-  opacityControl.style.cssText = `
-    display: flex;
-    align-items: center;
-    margin-right: 12px;
-    gap: 8px;
-  `;
-
-  const opacityLabel = document.createElement("span");
-  opacityLabel.textContent = "💫";
-  opacityLabel.style.cssText = `
-    font-size: 14px;
-    opacity: 0.7;
-  `;
-
-  const opacitySlider = document.createElement("input");
-  opacitySlider.type = "range";
-  opacitySlider.min = "30";
-  opacitySlider.max = "100";
-  opacitySlider.value = "95";
-  opacitySlider.style.cssText = `
-    width: 80px;
-    height: 4px;
-    background: ${
-      isDarkMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"
-    };
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-  `;
-
-  // 슬라이더 스타일
-  const sliderStyle = document.createElement("style");
-  sliderStyle.textContent = `
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #007aff;
-      cursor: pointer;
-      border: 2px solid white;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-    input[type="range"]::-moz-range-thumb {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #007aff;
-      cursor: pointer;
-      border: 2px solid white;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-  `;
-  document.head.appendChild(sliderStyle);
-
-  // 투명도 변경 이벤트
-  opacitySlider.addEventListener("input", (e) => {
-    const opacity = e.target.value / 100;
-    treeContainer.style.opacity = opacity;
-  });
-
-  opacityControl.appendChild(opacityLabel);
-  opacityControl.appendChild(opacitySlider);
-
   headerContainer.appendChild(title);
-  headerContainer.appendChild(opacityControl);
   headerContainer.appendChild(treeCloseButton);
   treeContainer.appendChild(headerContainer);
 
@@ -329,51 +262,7 @@ function createDOMTreeVisualization(
     }
   };
 
-  // Preview 윈도우용 투명도 조절 슬라이더
-  const previewOpacityControl = document.createElement("div");
-  previewOpacityControl.style.cssText = `
-    display: flex;
-    align-items: center;
-    margin-right: 12px;
-    gap: 8px;
-  `;
-
-  const previewOpacityLabel = document.createElement("span");
-  previewOpacityLabel.textContent = "💫";
-  previewOpacityLabel.style.cssText = `
-    font-size: 14px;
-    opacity: 0.7;
-  `;
-
-  const previewOpacitySlider = document.createElement("input");
-  previewOpacitySlider.type = "range";
-  previewOpacitySlider.min = "30";
-  previewOpacitySlider.max = "100";
-  previewOpacitySlider.value = "95";
-  previewOpacitySlider.style.cssText = `
-    width: 80px;
-    height: 4px;
-    background: ${
-      isDarkMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"
-    };
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-  `;
-
-  // Preview 투명도 변경 이벤트
-  previewOpacitySlider.addEventListener("input", (e) => {
-    const opacity = e.target.value / 100;
-    previewContainer.style.opacity = opacity;
-  });
-
-  previewOpacityControl.appendChild(previewOpacityLabel);
-  previewOpacityControl.appendChild(previewOpacitySlider);
-
   previewHeaderContainer.appendChild(previewTitle);
-  previewHeaderContainer.appendChild(previewOpacityControl);
   previewHeaderContainer.appendChild(previewCloseButton);
   previewContainer.appendChild(previewHeaderContainer);
 
@@ -607,6 +496,76 @@ function createBadge(state, isDarkMode = false) {
   return badge;
 }
 
+// 시간 정보가 포함된 Badge 생성 함수
+function createBadgeWithTiming(state, isDarkMode = false, timingMs = 0) {
+  const badge = document.createElement("span");
+  badge.classList.add("node-badge");
+  badge.dataset.state = state;
+
+  const stateInfo = NODE_STATES[state];
+
+  // Badge 내용을 상태명과 시간으로 구성
+  const badgeContent = document.createElement("div");
+  badgeContent.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  `;
+
+  // 상태명 텍스트
+  const stateText = document.createElement("span");
+  stateText.textContent = stateInfo.name;
+  stateText.style.cssText = `
+    color: ${stateInfo.color};
+    font-weight: 500;
+  `;
+
+  // 시간 텍스트 (빨간색)
+  const timingText = document.createElement("span");
+  timingText.textContent = `${timingMs.toFixed(1)}ms`;
+  timingText.style.cssText = `
+    color: #ff4757;
+    font-weight: 600;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  `;
+
+  badgeContent.appendChild(stateText);
+  badgeContent.appendChild(timingText);
+  badge.appendChild(badgeContent);
+
+  badge.style.cssText = `
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    background: ${
+      isDarkMode
+        ? `rgba(${stateInfo.color
+            .slice(1)
+            .match(/.{2}/g)
+            .map((hex) => parseInt(hex, 16))
+            .join(", ")}, 0.15)`
+        : stateInfo.bgColor
+    };
+    border: 1px solid ${stateInfo.color}40;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.3s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+
+  // 애니메이션으로 나타나기
+  setTimeout(() => {
+    badge.style.opacity = "1";
+    badge.style.transform = "scale(1)";
+  }, 50);
+
+  return badge;
+}
+
 // 렌더링 단계를 거치는 요소인지 확인하는 함수
 function shouldShowRenderingStages(element) {
   if (!element || !element.tagName) return false;
@@ -656,6 +615,31 @@ function updateNodeState(elementId, state, isDarkMode = false) {
   badgeContainer.appendChild(badge);
 }
 
+// 시간 정보를 포함한 노드 상태 업데이트 함수
+function updateNodeStateWithTiming(
+  elementId,
+  state,
+  isDarkMode = false,
+  timingMs = 0
+) {
+  nodeStates.set(elementId, state);
+
+  const nodeContainer = document.querySelector(
+    `[data-element-id="${elementId}"]`
+  );
+  if (!nodeContainer) return;
+
+  const badgeContainer = nodeContainer.querySelector(".node-badges");
+  if (!badgeContainer) return;
+
+  // 이미 있는 badge인지 확인
+  const existingBadge = badgeContainer.querySelector(`[data-state="${state}"]`);
+  if (existingBadge) return;
+
+  const badge = createBadgeWithTiming(state, isDarkMode, timingMs);
+  badgeContainer.appendChild(badge);
+}
+
 function setupPageGuide(previewContainer) {
   const pageGuide = previewContainer.querySelector("#page-guide");
   const scrollContainer = previewContainer.querySelector(
@@ -677,6 +661,10 @@ function setupPageGuide(previewContainer) {
     document.documentElement.offsetHeight,
     document.documentElement.clientHeight
   );
+
+  // 현재 사용자 viewport 크기
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
 
   // 전체 페이지 크기를 preview 영역에 맞게 스케일링
   const availableWidth = previewRect.width - 40; // 패딩 고려
@@ -735,14 +723,20 @@ function setupPageGuide(previewContainer) {
   const scrollY = window.pageYOffset || document.documentElement.scrollTop;
 
   // 실제 viewport 크기 (스크롤바 제외)
-  const viewportWidth = document.documentElement.clientWidth;
-  const viewportHeight = document.documentElement.clientHeight;
+  const actualViewportWidth = document.documentElement.clientWidth;
+  const actualViewportHeight = document.documentElement.clientHeight;
 
   // 정확한 viewport 위치와 크기 계산
   const viewportX = scrollX * scale;
   const viewportY = scrollY * scale;
-  const viewportW = Math.min(viewportWidth * scale, guideWidth - viewportX);
-  const viewportH = Math.min(viewportHeight * scale, guideHeight - viewportY);
+  const viewportW = Math.min(
+    actualViewportWidth * scale,
+    guideWidth - viewportX
+  );
+  const viewportH = Math.min(
+    actualViewportHeight * scale,
+    guideHeight - viewportY
+  );
 
   viewportIndicator.style.cssText = `
     position: absolute;
@@ -760,6 +754,44 @@ function setupPageGuide(previewContainer) {
   if (!pageGuide.querySelector(".viewport-indicator")) {
     pageGuide.appendChild(viewportIndicator);
   }
+
+  // 스크롤 이벤트 리스너 추가하여 viewport 실시간 업데이트
+  function updateViewportIndicator() {
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
+    const newViewportX = scrollX * scale;
+    const newViewportY = scrollY * scale;
+    const newViewportW = Math.min(
+      actualViewportWidth * scale,
+      guideWidth - newViewportX
+    );
+    const newViewportH = Math.min(
+      actualViewportHeight * scale,
+      guideHeight - newViewportY
+    );
+
+    viewportIndicator.style.left = newViewportX + "px";
+    viewportIndicator.style.top = newViewportY + "px";
+    viewportIndicator.style.width = Math.max(0, newViewportW) + "px";
+    viewportIndicator.style.height = Math.max(0, newViewportH) + "px";
+  }
+
+  // 스크롤 이벤트 리스너 등록 (throttle 적용)
+  let scrollTimeout;
+  window.addEventListener("scroll", () => {
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(updateViewportIndicator, 10);
+  });
+
+  // 윈도우 리사이즈 이벤트도 처리
+  let resizeTimeout;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      setupPageGuide(previewContainer); // 전체 다시 계산
+    }, 100);
+  });
 }
 
 // 실제 브라우저 렌더링 순서로 DOM 트리 구성
@@ -787,9 +819,9 @@ function buildDOMTreeInDocumentOrder(
 
   collectElements(rootElement);
 
-  // 실제 브라우저 렌더링 순서 시뮬레이션
+  // 실제 브라우저 렌더링 순서 시뮬레이션 (속도 개선)
   let currentTime = 0;
-  const RENDER_INTERVAL = 100; // 100ms 간격으로 요소 처리
+  const RENDER_INTERVAL = 30; // 30ms 간격으로 요소 처리 (100ms → 30ms로 빠르게)
 
   allElements.forEach((element, index) => {
     const depth = elementDepths.get(element);
@@ -1069,50 +1101,88 @@ function buildNodeContent(
       nodeHeader.style.transform = "translateX(0)";
     }, 50);
 
-    // 렌더링 단계를 거치는 요소들만 badge 업데이트
+    // 렌더링 단계를 거치는 요소들만 badge 업데이트 (시간 추적 포함)
     if (shouldShowRenderingStages(element)) {
+      const elementId = getElementUniqueId(element);
+      const timings = {}; // 각 단계별 시간 저장
+
       // 1. Loaded 상태 업데이트
+      timings.loadedStart = Date.now();
       setTimeout(() => {
-        updateNodeState(getElementUniqueId(element), "LOADED", isDarkMode);
-      }, 200);
+        timings.loadedEnd = Date.now();
+        updateNodeStateWithTiming(
+          elementId,
+          "LOADED",
+          isDarkMode,
+          timings.loadedEnd - timings.loadedStart
+        );
+      }, 80); // 200ms → 80ms로 단축
 
       // 2. DOM 생성 단계 - 미리보기에 기본 박스 생성
       if (shouldShowInPreview(element)) {
         setTimeout(() => {
+          timings.parsedStart = Date.now();
           createDOMPhase(element, previewContainer, depth);
-          updateNodeState(getElementUniqueId(element), "PARSED", isDarkMode);
-        }, 300);
+          timings.parsedEnd = Date.now();
+          updateNodeStateWithTiming(
+            elementId,
+            "PARSED",
+            isDarkMode,
+            timings.parsedEnd - timings.parsedStart
+          );
+        }, 120); // 300ms → 120ms로 단축
 
         // 3. Layout 계산 단계
         setTimeout(() => {
+          timings.layoutStart = Date.now();
           layoutPhase(element, previewContainer, depth);
-          updateNodeState(getElementUniqueId(element), "LAYOUT", isDarkMode);
-        }, 800);
+          timings.layoutEnd = Date.now();
+          updateNodeStateWithTiming(
+            elementId,
+            "LAYOUT",
+            isDarkMode,
+            timings.layoutEnd - timings.layoutStart
+          );
+        }, 200); // 800ms → 200ms로 단축
 
         // 4. Composite 단계 (페인팅)
         setTimeout(() => {
+          timings.compositeStart = Date.now();
           compositePhase(element, previewContainer, depth);
-          updateNodeState(
-            getElementUniqueId(element),
+          timings.compositeEnd = Date.now();
+          updateNodeStateWithTiming(
+            elementId,
             "COMPOSITED",
-            isDarkMode
+            isDarkMode,
+            timings.compositeEnd - timings.compositeStart
           );
-        }, 1300);
+        }, 320); // 1300ms → 320ms로 단축
       } else {
         // Preview에 표시되지 않지만 렌더링 단계를 거치는 요소들
         setTimeout(() => {
-          updateNodeState(getElementUniqueId(element), "PARSED", isDarkMode);
-        }, 300);
-        setTimeout(() => {
-          updateNodeState(getElementUniqueId(element), "LAYOUT", isDarkMode);
-        }, 800);
-        setTimeout(() => {
-          updateNodeState(
-            getElementUniqueId(element),
-            "COMPOSITED",
-            isDarkMode
+          updateNodeStateWithTiming(
+            elementId,
+            "PARSED",
+            isDarkMode,
+            Math.random() * 10 + 5
           );
-        }, 1300);
+        }, 120);
+        setTimeout(() => {
+          updateNodeStateWithTiming(
+            elementId,
+            "LAYOUT",
+            isDarkMode,
+            Math.random() * 15 + 8
+          );
+        }, 200);
+        setTimeout(() => {
+          updateNodeStateWithTiming(
+            elementId,
+            "COMPOSITED",
+            isDarkMode,
+            Math.random() * 20 + 10
+          );
+        }, 320);
       }
     } else {
       // 렌더링 단계를 거치지 않는 요소들 (script, link, meta 등)
@@ -1120,16 +1190,16 @@ function buildNodeContent(
       if (shouldShowInPreview(element)) {
         setTimeout(() => {
           createDOMPhase(element, previewContainer, depth);
-        }, 300);
+        }, 120);
         setTimeout(() => {
           layoutPhase(element, previewContainer, depth);
-        }, 800);
+        }, 200);
         setTimeout(() => {
           compositePhase(element, previewContainer, depth);
-        }, 1300);
+        }, 320);
       }
     }
-  }, 100); // 문서 순서 기반이므로 짧은 지연시간
+  }, 50); // 100ms → 50ms로 단축
 }
 
 // 노드 이벤트 핸들러 추가
@@ -1698,30 +1768,30 @@ function shouldShowInPreview(element) {
 
 function getElementSize(element, tagName) {
   const rect = element.getBoundingClientRect();
-  const scale = 0.5; // 노드 크기 증가 (0.3 -> 0.5)
+  const scale = 0.6; // 노드 크기 더 증가 (0.5 -> 0.6)
 
-  let width = Math.max(35, Math.min(rect.width * scale, 180)); // 최소 크기와 최대 크기 증가
-  let height = Math.max(28, Math.min(rect.height * scale, 150));
+  let width = Math.max(45, Math.min(rect.width * scale, 220)); // 최소/최대 크기 더 증가
+  let height = Math.max(35, Math.min(rect.height * scale, 180)); // 최소/최대 크기 더 증가
 
-  // 특정 요소들의 기본 크기 설정 (더 크게)
+  // 특정 요소들의 기본 크기 설정 (가독성 향상을 위해 더 크게)
   switch (tagName) {
     case "img":
-      width = Math.max(width, 70);
-      height = Math.max(height, 55);
+      width = Math.max(width, 85);
+      height = Math.max(height, 65);
       break;
     case "button":
-      width = Math.max(width, 80);
-      height = Math.max(height, 40);
+      width = Math.max(width, 100);
+      height = Math.max(height, 45);
       break;
     case "input":
-      width = Math.max(width, 90);
-      height = Math.max(height, 35);
+      width = Math.max(width, 110);
+      height = Math.max(height, 40);
       break;
     case "div":
     case "section":
     case "article":
-      if (width < 50) width = 120;
-      if (height < 35) height = 70;
+      if (width < 60) width = 140;
+      if (height < 40) height = 80;
       break;
     case "span":
     case "p":
@@ -1731,14 +1801,18 @@ function getElementSize(element, tagName) {
     case "h4":
     case "h5":
     case "h6":
-      width = Math.max(width, 60);
-      height = Math.max(height, 35);
+      width = Math.max(width, 80);
+      height = Math.max(height, 45);
       break;
     case "header":
     case "nav":
     case "footer":
-      width = Math.max(width, 150);
-      height = Math.max(height, 50);
+      width = Math.max(width, 180);
+      height = Math.max(height, 60);
+      break;
+    case "main":
+      width = Math.max(width, 200);
+      height = Math.max(height, 100);
       break;
   }
 
@@ -2139,13 +2213,13 @@ function createDOMPhase(element, previewContainer, depth) {
   const initialX = (actualX * scale + 10) * 0.8 + previewRect.width * 0.1;
   const initialY = (actualY * scale + 10) * 0.8 + previewRect.height * 0.1;
 
-  // 기본 DOM 박스 스타일 (실제 위치 근처에서 시작)
+  // 기본 DOM 박스 스타일 (가독성 향상)
   box.style.cssText = `
     position: absolute;
-    border: 2px dashed #999;
-    background-color: #f9f9f9;
-    min-width: 45px;
-    min-height: 35px;
+    border: 2px dashed #007aff;
+    background-color: rgba(0, 122, 255, 0.05);
+    min-width: 55px;
+    min-height: 45px;
     font-size: 11px;
     display: flex;
     align-items: center;
@@ -2156,19 +2230,55 @@ function createDOMPhase(element, previewContainer, depth) {
     left: ${initialX}px;
     top: ${initialY}px;
     transform-origin: center;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.1);
+    backdrop-filter: blur(2px);
   `;
 
-  // 라벨 추가
+  // 메인 라벨 추가 (가독성 향상)
   const label = document.createElement("span");
   label.textContent = getElementLabel(element, tagName);
   label.style.cssText = `
-    font-size: 8px;
-    color: #666;
+    font-size: 10px;
+    color: #333;
     text-align: center;
-    font-weight: 600;
+    font-weight: 700;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 2px 4px;
+    border-radius: 3px;
+    border: 1px solid #ddd;
+    margin-bottom: 2px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   `;
-  box.appendChild(label);
+
+  // 태그 타입 라벨 추가
+  const typeLabel = document.createElement("span");
+  typeLabel.textContent = `<${tagName}>`;
+  typeLabel.style.cssText = `
+    font-size: 7px;
+    color: #999;
+    text-align: center;
+    font-weight: 500;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 1px 3px;
+    border-radius: 2px;
+  `;
+
+  // 라벨 컨테이너
+  const labelContainer = document.createElement("div");
+  labelContainer.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+  `;
+
+  labelContainer.appendChild(label);
+  labelContainer.appendChild(typeLabel);
+  box.appendChild(labelContainer);
 
   // 스크롤 컨테이너가 있으면 그곳에 추가, 없으면 기본 컨테이너에 추가
   const scrollContainer = previewContainer.querySelector(
@@ -2247,7 +2357,7 @@ function layoutPhase(element, previewContainer, depth) {
     element.tagName ? element.tagName.toLowerCase() : element.nodeName
   );
 
-  // Layout 단계 스타일 - 기존 스타일을 완전히 대체
+  // Layout 단계 스타일 - 가독성 향상
   box.style.cssText = `
     position: absolute;
     left: ${x}px;
@@ -2255,8 +2365,8 @@ function layoutPhase(element, previewContainer, depth) {
     width: ${sizes.width};
     height: ${sizes.height};
     border: 2px solid #ff9800;
-    background-color: #fff3e0;
-    opacity: 0.8;
+    background-color: rgba(255, 152, 0, 0.1);
+    opacity: 0.9;
     transform: scale(1);
     transition: all 0.5s ease;
     font-size: 10px;
@@ -2266,6 +2376,9 @@ function layoutPhase(element, previewContainer, depth) {
     transform-origin: center;
     font-weight: 600;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    border-radius: 6px;
+    box-shadow: 0 3px 12px rgba(255, 152, 0, 0.2);
+    backdrop-filter: blur(2px);
   `;
 }
 
@@ -2316,12 +2429,15 @@ function compositePhase(element, previewContainer, depth) {
     }
   }
 
-  // Composite 단계 스타일 - 이전 스타일 유지하면서 최종 스타일 적용
-  box.style.border = `1px solid ${computedStyle.borderColor || "#333"}`;
+  // Composite 단계 스타일 - 최종 가독성 향상
+  box.style.border = `2px solid ${computedStyle.borderColor || "#333"}`;
   box.style.backgroundColor = backgroundColor;
   box.style.opacity = "1";
-  box.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+  box.style.boxShadow =
+    "0 4px 12px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.1)";
   box.style.cursor = "pointer";
+  box.style.borderRadius = "6px";
+  box.style.backdropFilter = "blur(2px)";
 
   // 고유 ID 저장
   box.dataset.elementId = getElementUniqueId(element);
@@ -2442,12 +2558,12 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
           "0 20px 40px rgba(0, 0, 0, 0.15), 0 10px 20px rgba(0, 0, 0, 0.1)",
       };
 
-  // Tree Container 스타일 (Apple System UI with fixed header)
+  // Tree Container 스타일 (Apple System UI with fixed header) - 폭 확대
   treeContainer.style.cssText = `
     position: fixed;
     top: 20px;
     right: 20px;
-    width: 420px;
+    width: 650px;
     max-height: 80vh;
     background: ${treeTheme.background};
     backdrop-filter: blur(20px);
@@ -2466,12 +2582,12 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
     transition: all 0.3s ease;
   `;
 
-  // Preview Container 스타일 (Apple System UI with fixed header)
+  // Preview Container 스타일 (Apple System UI with fixed header) - 위치 조정
   previewContainer.style.cssText = `
     position: fixed;
     top: 20px;
-    right: 520px;
-    width: 480px;
+    right: 690px;
+    width: 520px;
     height: 650px;
     background: ${previewTheme.background};
     backdrop-filter: blur(20px);
@@ -3089,5 +3205,19 @@ function scrollToAndSelectTreeNode(element) {
       previewBox.style.transform = "scale(1.15)";
       previewBox.style.zIndex = "1000";
     }
+  }
+}
+
+// Window opacity 변경 함수
+function changeWindowOpacity(opacity) {
+  const treeContainer = document.getElementById("dom-tree-visualization");
+  const previewContainer = document.getElementById("dom-preview-visualization");
+
+  if (treeContainer) {
+    treeContainer.style.opacity = opacity;
+  }
+
+  if (previewContainer) {
+    previewContainer.style.opacity = opacity;
   }
 }

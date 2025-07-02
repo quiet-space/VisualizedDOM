@@ -492,6 +492,26 @@ function initializeWindowButtons() {
   }
 }
 
+// Opacity 제어 함수
+function changeWindowOpacity(value) {
+  const opacityValue = document.getElementById("opacity-value");
+  opacityValue.textContent = value + "%";
+
+  // 활성 탭의 시각화 창들에 opacity 변경 메시지 전송
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    if (tabs[0]) {
+      chrome.tabs
+        .sendMessage(tabs[0].id, {
+          action: "changeWindowOpacity",
+          opacity: value / 100,
+        })
+        .catch(() => {
+          // 시각화가 실행되지 않았으면 무시
+        });
+    }
+  });
+}
+
 // 버튼 클릭 이벤트 리스너 추가
 document.addEventListener("DOMContentLoaded", function () {
   const button = document.getElementById("btn");
@@ -500,12 +520,20 @@ document.addEventListener("DOMContentLoaded", function () {
   const themeToggle = document.getElementById("theme-toggle");
   const previewWindowBtn = document.getElementById("preview-window-btn");
   const treeWindowBtn = document.getElementById("tree-window-btn");
+  const opacitySlider = document.getElementById("window-opacity-slider");
 
   button.addEventListener("click", handleButtonClick);
   refreshBtn.addEventListener("click", refreshUrl);
   themeToggle.addEventListener("click", toggleDarkMode);
   previewWindowBtn.addEventListener("click", togglePreviewWindow);
   treeWindowBtn.addEventListener("click", toggleTreeWindow);
+
+  // Opacity 슬라이더 이벤트
+  if (opacitySlider) {
+    opacitySlider.addEventListener("input", function (e) {
+      changeWindowOpacity(e.target.value);
+    });
+  }
 
   // 윈도우 버튼 상태 초기화
   initializeWindowButtons();

@@ -53,28 +53,200 @@ function createDOMTreeVisualization(initialDarkMode = false) {
   // 초기 스타일 적용
   applyTheme(treeContainer, previewContainer, isDarkMode);
 
+  // 헤더 컨테이너 생성 (상단 고정)
+  const headerContainer = document.createElement("div");
+  headerContainer.classList.add("window-header");
+  headerContainer.style.cssText = `
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: ${
+      isDarkMode ? "rgba(28, 28, 30, 0.95)" : "rgba(255, 255, 255, 0.95)"
+    };
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid ${
+      isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
+    };
+    border-radius: 20px 20px 0 0;
+    padding: 18px 20px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  `;
+
   // 제목 추가 (드래그 핸들 역할)
   const title = document.createElement("div");
   title.textContent = "DOM Tree Structure";
   title.classList.add("drag-handle", "window-title");
-  treeContainer.appendChild(title);
+  title.style.cssText = `
+    font-size: 16px;
+    font-weight: 600;
+    color: ${isDarkMode ? "#f2f2f7" : "#1d1d1f"};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.01em;
+    cursor: move;
+    user-select: none;
+    flex: 1;
+    text-align: center;
+    margin: 0;
+  `;
+
+  // 닫기 버튼 (Apple System UI 스타일)
+  const treeCloseButton = document.createElement("button");
+  treeCloseButton.innerHTML = `
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  `;
+  treeCloseButton.style.cssText = `
+    position: relative;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: #ff5f57;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(255, 95, 87, 0.3);
+    margin-left: auto;
+  `;
+
+  treeCloseButton.addEventListener("mouseenter", () => {
+    treeCloseButton.style.transform = "scale(1.1)";
+    treeCloseButton.style.boxShadow = "0 4px 12px rgba(255, 95, 87, 0.4)";
+  });
+
+  treeCloseButton.addEventListener("mouseleave", () => {
+    treeCloseButton.style.transform = "scale(1)";
+    treeCloseButton.style.boxShadow = "0 2px 8px rgba(255, 95, 87, 0.3)";
+  });
+
+  treeCloseButton.onclick = () => {
+    // Tree window만 닫기
+    treeContainer.remove();
+
+    // 만약 Preview window도 없다면 하이라이트 제거 및 상태 초기화
+    if (!document.getElementById("dom-preview-visualization")) {
+      removeAllHighlights();
+      isVisualizationActive = false;
+    }
+  };
+
+  headerContainer.appendChild(title);
+  headerContainer.appendChild(treeCloseButton);
+  treeContainer.appendChild(headerContainer);
+
+  // 미리보기 헤더 컨테이너 생성 (상단 고정)
+  const previewHeaderContainer = document.createElement("div");
+  previewHeaderContainer.classList.add("window-header");
+  previewHeaderContainer.style.cssText = `
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: ${
+      isDarkMode ? "rgba(28, 28, 30, 0.95)" : "rgba(255, 255, 255, 0.95)"
+    };
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid ${
+      isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
+    };
+    border-radius: 20px 20px 0 0;
+    padding: 18px 20px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  `;
 
   // 미리보기 제목 추가 (드래그 핸들 역할)
   const previewTitle = document.createElement("div");
   previewTitle.textContent = "Layout & Paint Preview";
   previewTitle.classList.add("drag-handle", "window-title");
-  previewContainer.appendChild(previewTitle);
+  previewTitle.style.cssText = `
+    font-size: 16px;
+    font-weight: 600;
+    color: ${isDarkMode ? "#f2f2f7" : "#1d1d1f"};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.01em;
+    cursor: move;
+    user-select: none;
+    flex: 1;
+    text-align: center;
+    margin: 0;
+  `;
+
+  // 미리보기 닫기 버튼 (Apple System UI 스타일)
+  const previewCloseButton = document.createElement("button");
+  previewCloseButton.innerHTML = `
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  `;
+  previewCloseButton.style.cssText = `
+    position: relative;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: #ff5f57;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(255, 95, 87, 0.3);
+    margin-left: auto;
+  `;
+
+  previewCloseButton.addEventListener("mouseenter", () => {
+    previewCloseButton.style.transform = "scale(1.1)";
+    previewCloseButton.style.boxShadow = "0 4px 12px rgba(255, 95, 87, 0.4)";
+  });
+
+  previewCloseButton.addEventListener("mouseleave", () => {
+    previewCloseButton.style.transform = "scale(1)";
+    previewCloseButton.style.boxShadow = "0 2px 8px rgba(255, 95, 87, 0.3)";
+  });
+
+  previewCloseButton.onclick = () => {
+    // Preview window만 닫기
+    previewContainer.remove();
+
+    // 만약 Tree window도 없다면 하이라이트 제거 및 상태 초기화
+    if (!document.getElementById("dom-tree-visualization")) {
+      removeAllHighlights();
+      isVisualizationActive = false;
+    }
+  };
+
+  previewHeaderContainer.appendChild(previewTitle);
+  previewHeaderContainer.appendChild(previewCloseButton);
+  previewContainer.appendChild(previewHeaderContainer);
 
   // 미리보기 내용 컨테이너
   const previewContent = document.createElement("div");
   previewContent.id = "preview-content";
   previewContent.style.cssText = `
-    width: 100%;
-    height: calc(100% - 40px);
+    flex: 1;
     position: relative;
     overflow: hidden;
-    background: #f9f9f9;
-    border: 1px solid #ddd;
+    background: ${isDarkMode ? "#2c2c2e" : "#f9f9f9"};
+    border: 1px solid ${
+      isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
+    };
+    border-radius: 12px;
+    margin: 15px 20px 20px 20px;
+    transition: all 0.2s ease;
   `;
   previewContainer.appendChild(previewContent);
 
@@ -83,69 +255,67 @@ function createDOMTreeVisualization(initialDarkMode = false) {
   resizeHandle.classList.add("resize-handle");
   resizeHandle.style.cssText = `
     position: absolute;
-    bottom: 0;
-    right: 0;
+    bottom: 5px;
+    right: 5px;
     width: 20px;
     height: 20px;
-    background: linear-gradient(135deg, transparent 0%, transparent 30%, #999 30%, #999 40%, transparent 40%, transparent 60%, #999 60%, #999 70%, transparent 70%);
+    background: linear-gradient(135deg, transparent 0%, transparent 30%, ${
+      isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+    } 30%, ${
+    isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+  } 40%, transparent 40%, transparent 60%, ${
+    isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+  } 60%, ${
+    isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+  } 70%, transparent 70%);
     cursor: nw-resize;
     z-index: 1001;
-    border-bottom-right-radius: 10px;
+    border-bottom-right-radius: 15px;
+    transition: all 0.2s ease;
   `;
   previewContainer.appendChild(resizeHandle);
 
-  // 트리 내용 컨테이너
+  // 트리 내용 컨테이너 (스크롤 가능)
   const treeContent = document.createElement("div");
   treeContent.id = "tree-content";
+  treeContent.style.cssText = `
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 20px 25px 25px 25px;
+    scrollbar-width: thin;
+    scrollbar-color: ${
+      isDarkMode
+        ? "rgba(255, 255, 255, 0.3) transparent"
+        : "rgba(0, 0, 0, 0.3) transparent"
+    };
+  `;
+
+  // WebKit 브라우저용 스크롤바 스타일
+  const scrollbarStyle = document.createElement("style");
+  scrollbarStyle.textContent = `
+    #tree-content::-webkit-scrollbar {
+      width: 6px;
+    }
+    #tree-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #tree-content::-webkit-scrollbar-thumb {
+      background: ${
+        isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+      };
+      border-radius: 3px;
+      transition: all 0.2s ease;
+    }
+    #tree-content::-webkit-scrollbar-thumb:hover {
+      background: ${
+        isDarkMode ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, 0.5)"
+      };
+    }
+  `;
+  document.head.appendChild(scrollbarStyle);
+
   treeContainer.appendChild(treeContent);
-
-  // 닫기 버튼 (트리 컨테이너용)
-  const closeButton = document.createElement("button");
-  closeButton.textContent = "×";
-  closeButton.style.cssText = `
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    background: #ff4444;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 25px;
-    height: 25px;
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-  `;
-  closeButton.onclick = () => {
-    treeContainer.remove();
-    previewContainer.remove();
-    isVisualizationActive = false;
-  };
-  treeContainer.appendChild(closeButton);
-
-  // 닫기 버튼 (미리보기 컨테이너용)
-  const previewCloseButton = document.createElement("button");
-  previewCloseButton.textContent = "×";
-  previewCloseButton.style.cssText = `
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    background: #ff4444;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-  `;
-  previewCloseButton.onclick = () => {
-    treeContainer.remove();
-    previewContainer.remove();
-    isVisualizationActive = false;
-  };
-  previewContainer.appendChild(previewCloseButton);
 
   document.body.appendChild(treeContainer);
   document.body.appendChild(previewContainer);
@@ -471,7 +641,54 @@ function shouldShowInPreview(element) {
     return false;
   }
 
-  return !skipTags.includes(tagName);
+  // 기본 태그 필터링
+  if (skipTags.includes(tagName)) {
+    return false;
+  }
+
+  // 실제로 화면에 표시되는지 확인
+  const rect = element.getBoundingClientRect();
+  const computedStyle = window.getComputedStyle(element);
+
+  // 크기가 없거나 화면 밖에 있는 요소 제외
+  if (rect.width === 0 || rect.height === 0) {
+    return false;
+  }
+
+  // display: none이거나 visibility: hidden인 요소 제외
+  if (
+    computedStyle.display === "none" ||
+    computedStyle.visibility === "hidden"
+  ) {
+    return false;
+  }
+
+  // opacity가 0인 요소 제외
+  if (parseFloat(computedStyle.opacity) === 0) {
+    return false;
+  }
+
+  // 화면 영역 밖에 완전히 벗어난 요소 제외
+  const viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight,
+  };
+
+  if (
+    rect.right < 0 ||
+    rect.bottom < 0 ||
+    rect.left > viewport.width ||
+    rect.top > viewport.height
+  ) {
+    return false;
+  }
+
+  // 너무 작은 요소들 제외 (1px 이하)
+  if (rect.width < 1 || rect.height < 1) {
+    return false;
+  }
+
+  return true;
 }
 
 function getElementSize(element, tagName) {
@@ -931,8 +1148,9 @@ function layoutPhase(element, previewContainer, depth) {
     element.tagName ? element.tagName.toLowerCase() : element.nodeName
   );
 
-  // Layout 단계 스타일
-  box.style.cssText += `
+  // Layout 단계 스타일 - 기존 스타일을 완전히 대체
+  box.style.cssText = `
+    position: absolute;
     left: ${x}px;
     top: ${y}px;
     width: ${sizes.width};
@@ -941,6 +1159,12 @@ function layoutPhase(element, previewContainer, depth) {
     background-color: #fff3e0;
     opacity: 0.8;
     transform: scale(1);
+    transition: all 0.5s ease;
+    font-size: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center;
   `;
 }
 
@@ -991,14 +1215,12 @@ function compositePhase(element, previewContainer, depth) {
     }
   }
 
-  // Composite 단계 스타일
-  box.style.cssText += `
-    border: 1px solid ${computedStyle.borderColor || "#333"};
-    background-color: ${backgroundColor};
-    opacity: 1;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    cursor: pointer;
-  `;
+  // Composite 단계 스타일 - 이전 스타일 유지하면서 최종 스타일 적용
+  box.style.border = `1px solid ${computedStyle.borderColor || "#333"}`;
+  box.style.backgroundColor = backgroundColor;
+  box.style.opacity = "1";
+  box.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+  box.style.cursor = "pointer";
 
   // 고유 ID 저장
   box.dataset.elementId = getElementUniqueId(element);
@@ -1119,7 +1341,7 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
           "0 20px 40px rgba(0, 0, 0, 0.15), 0 10px 20px rgba(0, 0, 0, 0.1)",
       };
 
-  // Tree Container 스타일 (Apple System UI)
+  // Tree Container 스타일 (Apple System UI with fixed header)
   treeContainer.style.cssText = `
     position: fixed;
     top: 20px;
@@ -1131,17 +1353,19 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
     color: ${treeTheme.color};
     border: ${treeTheme.border};
     border-radius: 20px;
-    padding: 25px;
+    padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     font-size: 13px;
     line-height: 1.5;
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     z-index: 10000;
     box-shadow: ${treeTheme.shadow};
     transition: all 0.3s ease;
   `;
 
-  // Preview Container 스타일 (Apple System UI)
+  // Preview Container 스타일 (Apple System UI with fixed header)
   previewContainer.style.cssText = `
     position: fixed;
     top: 20px;
@@ -1153,66 +1377,15 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
     color: ${previewTheme.color};
     border: ${previewTheme.border};
     border-radius: 20px;
-    padding: 20px;
+    padding: 0;
     z-index: 9999;
     box-shadow: ${previewTheme.shadow};
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
     transition: all 0.3s ease;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   `;
-
-  // 제목 스타일 업데이트 (Apple System UI)
-  const treeTitle = treeContainer.querySelector(".window-title");
-  const previewTitle = previewContainer.querySelector(".window-title");
-
-  if (treeTitle) {
-    treeTitle.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 20px;
-      color: ${treeTheme.titleColor};
-      text-align: center;
-      border-bottom: ${treeTheme.titleBorder};
-      padding-bottom: 12px;
-      cursor: move;
-      user-select: none;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      letter-spacing: -0.01em;
-    `;
-  }
-
-  if (previewTitle) {
-    previewTitle.style.cssText = `
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 15px;
-      color: ${previewTheme.titleColor};
-      text-align: center;
-      border-bottom: ${previewTheme.titleBorder};
-      padding-bottom: 10px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      cursor: move;
-      user-select: none;
-      letter-spacing: -0.01em;
-    `;
-  }
-
-  // 미리보기 내용 컨테이너 스타일 업데이트
-  const previewContent = previewContainer.querySelector("#preview-content");
-  if (previewContent) {
-    previewContent.style.cssText = `
-      width: 100%;
-      height: calc(100% - 50px);
-      position: relative;
-      overflow: hidden;
-      background: ${previewTheme.contentBg};
-      border: 1px solid ${
-        isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
-      };
-      border-radius: 12px;
-      transition: all 0.2s ease;
-    `;
-  }
 
   // 리사이즈 핸들 스타일 업데이트 (Apple System UI)
   const resizeHandle = previewContainer.querySelector(".resize-handle");
@@ -1234,38 +1407,6 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
     `;
   }
 
-  // 닫기 버튼들 스타일 업데이트 (Apple System UI)
-  const closeButtons = document.querySelectorAll(
-    '[style*="background: #ff4444"], [style*="background:#ff4444"]'
-  );
-  closeButtons.forEach((closeBtn) => {
-    if (
-      closeBtn &&
-      (closeBtn.closest("#dom-tree-visualization") ||
-        closeBtn.closest("#dom-preview-visualization"))
-    ) {
-      closeBtn.style.cssText = `
-        position: absolute;
-        top: 18px;
-        right: 18px;
-        background: #ff3b30;
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 28px;
-        height: 28px;
-        cursor: pointer;
-        font-size: 16px;
-        line-height: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-        box-shadow: 0 2px 8px rgba(255, 59, 48, 0.3);
-      `;
-    }
-  });
-
   // Tree 노드 스타일 업데이트
   const treeNodes = treeContainer.querySelectorAll(".tree-node-header");
   treeNodes.forEach((node) => {
@@ -1283,10 +1424,76 @@ function updateVisualizationTheme(isDarkMode) {
 
   if (treeContainer && previewContainer) {
     applyTheme(treeContainer, previewContainer, isDarkMode);
+
+    // 헤더 배경색 업데이트
+    const treeHeader = treeContainer.querySelector(".window-header");
+    const previewHeader = previewContainer.querySelector(".window-header");
+
+    if (treeHeader) {
+      treeHeader.style.background = isDarkMode
+        ? "rgba(28, 28, 30, 0.95)"
+        : "rgba(255, 255, 255, 0.95)";
+      treeHeader.style.borderBottomColor = isDarkMode
+        ? "rgba(255, 255, 255, 0.1)"
+        : "rgba(0, 0, 0, 0.1)";
+    }
+
+    if (previewHeader) {
+      previewHeader.style.background = isDarkMode
+        ? "rgba(28, 28, 30, 0.95)"
+        : "rgba(255, 255, 255, 0.95)";
+      previewHeader.style.borderBottomColor = isDarkMode
+        ? "rgba(255, 255, 255, 0.1)"
+        : "rgba(0, 0, 0, 0.1)";
+    }
+
+    // 제목 색상 업데이트
+    const titles = document.querySelectorAll(
+      "#dom-tree-visualization .window-title, #dom-preview-visualization .window-title"
+    );
+    titles.forEach((title) => {
+      title.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
+    });
+
+    // 미리보기 내용 컨테이너 배경색 업데이트
+    const previewContent = previewContainer.querySelector("#preview-content");
+    if (previewContent) {
+      previewContent.style.background = isDarkMode ? "#2c2c2e" : "#f9f9f9";
+      previewContent.style.borderColor = isDarkMode
+        ? "rgba(255, 255, 255, 0.1)"
+        : "rgba(0, 0, 0, 0.1)";
+    }
+
+    // 스크롤바 색상 업데이트
+    const existingScrollbarStyle = document.querySelector(
+      'style[data-scrollbar="tree-content"]'
+    );
+    if (existingScrollbarStyle) {
+      existingScrollbarStyle.remove();
+    }
+
+    const scrollbarStyle = document.createElement("style");
+    scrollbarStyle.setAttribute("data-scrollbar", "tree-content");
+    scrollbarStyle.textContent = `
+      #tree-content::-webkit-scrollbar-thumb {
+        background: ${
+          isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+        };
+      }
+      #tree-content::-webkit-scrollbar-thumb:hover {
+        background: ${
+          isDarkMode ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, 0.5)"
+        };
+      }
+    `;
+    document.head.appendChild(scrollbarStyle);
   }
 }
 
 function removeExistingVisualization() {
+  // 모든 하이라이트 제거
+  removeAllHighlights();
+
   const existing = document.getElementById("dom-tree-visualization");
   if (existing) {
     existing.remove();
@@ -1418,6 +1625,18 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+// 페이지 언로드 시 모든 하이라이트 정리
+window.addEventListener("beforeunload", () => {
+  removeAllHighlights();
+});
+
+// 페이지 히든 상태일 때도 하이라이트 정리
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    removeAllHighlights();
+  }
+});
 
 // 요소에 고유 ID 생성/할당
 function getElementUniqueId(element) {

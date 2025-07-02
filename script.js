@@ -225,7 +225,7 @@ async function handleButtonClick() {
         // URL 정보 업데이트
         getUrl();
 
-        button.textContent = "Go Visualize";
+        button.textContent = "Run Visualize";
         button.disabled = false;
         refreshBtn.disabled = false;
         refreshBtn.style.opacity = "1";
@@ -234,7 +234,7 @@ async function handleButtonClick() {
       }
     } catch (error) {
       showError(`오류 발생: ${error.message}`);
-      button.textContent = "Go Visualize";
+      button.textContent = "Run Visualize";
       button.disabled = false;
       refreshBtn.disabled = false;
       refreshBtn.style.opacity = "1";
@@ -243,7 +243,7 @@ async function handleButtonClick() {
   }
 
   button.disabled = true;
-  button.textContent = "Working hard...";
+  button.textContent = "In progress";
   refreshBtn.disabled = true;
   refreshBtn.style.opacity = "0.5";
 
@@ -286,17 +286,16 @@ async function handleButtonClick() {
       await waitForPreviewComplete();
 
       // 버튼 텍스트 변경
-      button.textContent = "We Did It!";
+      button.textContent = "Rerun";
       button.disabled = false;
       refreshBtn.disabled = false;
       refreshBtn.style.opacity = "1";
     }
   } catch (error) {
-    console.error("오류 발생:", error);
     showError(error.message);
     enableUrlInput();
 
-    button.textContent = "Go Visualize";
+    button.textContent = "Rerun";
     button.disabled = false;
     refreshBtn.disabled = false;
     refreshBtn.style.opacity = "1";

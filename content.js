@@ -98,7 +98,7 @@ function createDOMTreeVisualization(
     background: ${
       isDarkMode ? "rgba(28, 28, 30, 0.95)" : "rgba(255, 255, 255, 0.95)"
     };
-    backdrop-filter: blur(20px);
+    // backdrop-filter: blur(20px);
     border-bottom: 1px solid ${
       isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
     };
@@ -188,7 +188,7 @@ function createDOMTreeVisualization(
     background: ${
       isDarkMode ? "rgba(28, 28, 30, 0.95)" : "rgba(255, 255, 255, 0.95)"
     };
-    backdrop-filter: blur(20px);
+    // backdrop-filter: blur(20px);
     border-bottom: 1px solid ${
       isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
     };
@@ -2260,7 +2260,7 @@ function createDOMPhase(element, previewContainer, depth) {
     transform-origin: center;
     border-radius: 6px;
     box-shadow: 0 2px 8px rgba(0, 122, 255, 0.1);
-    backdrop-filter: blur(2px);
+    // backdrop-filter: blur(2px);
   `;
 
   // 메인 라벨 추가 (가독성 향상)
@@ -2406,7 +2406,7 @@ function layoutPhase(element, previewContainer, depth) {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     border-radius: 6px;
     box-shadow: 0 3px 12px rgba(255, 152, 0, 0.2);
-    backdrop-filter: blur(2px);
+    // backdrop-filter: blur(2px);
   `;
 }
 
@@ -2465,7 +2465,7 @@ function compositePhase(element, previewContainer, depth) {
     "0 4px 12px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.1)";
   box.style.cursor = "pointer";
   box.style.borderRadius = "6px";
-  box.style.backdropFilter = "blur(2px)";
+  // box.style.backdropFilter = "blur(2px)";
 
   // 고유 ID 저장
   box.dataset.elementId = getElementUniqueId(element);
@@ -2594,7 +2594,7 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
     width: 650px;
     max-height: 80vh;
     background: ${treeTheme.background};
-    backdrop-filter: blur(20px);
+    // backdrop-filter: blur(20px);
     color: ${treeTheme.color};
     border: ${treeTheme.border};
     border-radius: 20px;
@@ -2618,7 +2618,7 @@ function applyTheme(treeContainer, previewContainer, isDarkMode) {
     width: 520px;
     height: 650px;
     background: ${previewTheme.background};
-    backdrop-filter: blur(20px);
+    // backdrop-filter: blur(20px);
     color: ${previewTheme.color};
     border: ${previewTheme.border};
     border-radius: 20px;
@@ -2946,7 +2946,7 @@ style.textContent = `
     padding: 2px;
   }
 `;
-document.head.appendChild(style);
+// document.head.appendChild(style);
 
 // 페이지 언로드 시 모든 하이라이트 정리
 window.addEventListener("beforeunload", () => {
@@ -3076,7 +3076,7 @@ function removeHighlight(element) {
   }
 
   // outline 제거
-  element.style.outline = "";
+  // element.style.outline = "";
   element.style.outlineOffset = "";
 }
 

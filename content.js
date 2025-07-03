@@ -266,7 +266,7 @@ function createDOMTreeVisualization(
   previewHeaderContainer.appendChild(previewCloseButton);
   previewContainer.appendChild(previewHeaderContainer);
 
-  // 미리보기 내용 컨테이너
+  // 미리보기 내용 컨테이너 (스크롤 가능)
   const previewContent = document.createElement("div");
   previewContent.id = "preview-content";
   previewContent.style.cssText = `
@@ -287,6 +287,7 @@ function createDOMTreeVisualization(
         : "rgba(0, 0, 0, 0.3) transparent"
     };
   `;
+
   // Preview 스크롤 컨테이너 추가
   const scrollContainer = document.createElement("div");
   scrollContainer.id = "preview-scroll-container";
@@ -297,7 +298,7 @@ function createDOMTreeVisualization(
     min-width: 800px;
     min-height: 1000px;
   `;
-
+  
   // 페이지 크기 표시용 배경 가이드 추가
   const pageGuide = document.createElement("div");
   pageGuide.id = "page-guide";
@@ -318,6 +319,35 @@ function createDOMTreeVisualization(
 
   scrollContainer.appendChild(pageGuide);
   previewContent.appendChild(scrollContainer);
+  
+  // 빈 영역 클릭 시 선택 해제
+  scrollContainer.onclick = (e) => {
+    // 클릭된 요소가 scroll-container 자체인 경우에만 처리 (버블링된 이벤트는 무시)
+    if (e.target === scrollContainer) {
+      // 선택된 Preview box 스타일 제거
+      const selectedPreview = previewContainer.querySelector(".preview-box.selected");
+      if (selectedPreview) {
+        selectedPreview.classList.remove("selected");
+        selectedPreview.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+        selectedPreview.style.transform = "scale(1)";
+        selectedPreview.style.zIndex = "";
+      }
+
+      // 하이라이트 제거
+      removeAllHighlights();
+
+      // DOM Structure에서 선택 해제
+      const treeContainer = document.getElementById("tree-content");
+      if (treeContainer) {
+        const prevSelected = treeContainer.querySelector(".tree-node-header.selected");
+        if (prevSelected) {
+          prevSelected.classList.remove("selected");
+          const prevDepth = parseInt(prevSelected.dataset.depth) || 0;
+          prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
+        }
+      }
+    }
+  };
 
   previewContainer.appendChild(previewContent);
 
@@ -1281,14 +1311,6 @@ function addNodeEventHandlers(
         prevSelected.classList.remove("selected");
         const prevDepth = parseInt(prevSelected.dataset.depth) || 0;
         prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
-
-        // 이전 선택된 노드의 텍스트 색상도 복원
-        const prevNodeText = prevSelected.querySelector(
-          "span:not(.tree-toggle)"
-        );
-        if (prevNodeText) {
-          prevNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
-        }
       }
 
       // 현재 노드 선택 스타일 적용
@@ -1536,7 +1558,9 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
       prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
 
       // 이전 선택된 노드의 텍스트 색상도 복원
-      const prevNodeText = prevSelected.querySelector("span:not(.tree-toggle)");
+      const prevNodeText = prevSelected.querySelector(
+        "span:not(.tree-toggle)"
+      );
       if (prevNodeText) {
         prevNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
       }
@@ -2501,6 +2525,29 @@ function compositePhase(element, previewContainer, depth) {
 
   // Preview box 클릭 효과
   box.onclick = () => {
+    // 이미 선택된 상태인 경우 선택 해제
+    if (box.classList.contains("selected")) {
+      box.classList.remove("selected");
+      box.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+      box.style.transform = "scale(1)";
+      box.style.zIndex = "";
+      
+      // 하이라이트 제거
+      removeAllHighlights();
+      
+      // DOM Structure에서 선택 해제
+      const treeContainer = document.getElementById("tree-content");
+      if (treeContainer) {
+        const prevSelected = treeContainer.querySelector(".tree-node-header.selected");
+        if (prevSelected) {
+          prevSelected.classList.remove("selected");
+          const prevDepth = parseInt(prevSelected.dataset.depth) || 0;
+          prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
+        }
+      }
+      return;
+    }
+
     // 기존 선택된 Preview box 스타일 제거
     const prevSelectedPreview = previewContainer.querySelector(
       ".preview-box.selected"

@@ -1831,9 +1831,29 @@ function getElementSize(element, tagName) {
 }
 
 function getElementLabel(element, tagName) {
+  // If element has an ID, use that
   if (element.id) return `#${element.id.substring(0, 8)}`;
-  if (element.className)
-    return `.${element.className.split(" ")[0].substring(0, 8)}`;
+
+  // Handle className based on its type
+  if (element.className) {
+    // Handle SVG elements (className is SVGAnimatedString)
+    if (typeof element.className === 'object' && element.className.baseVal) {
+      const firstClass = element.className.baseVal.split(" ")[0];
+      if (firstClass) return `.${firstClass.substring(0, 8)}`;
+    }
+    // Handle regular elements (className is string)
+    else if (typeof element.className === 'string') {
+      const firstClass = element.className.split(" ")[0];
+      if (firstClass) return `.${firstClass.substring(0, 8)}`;
+    }
+  }
+
+  // If no ID or valid className, use classList
+  if (element.classList && element.classList.length > 0) {
+    return `.${element.classList[0].substring(0, 8)}`;
+  }
+
+  // Fallback to tagName
   return tagName.toUpperCase();
 }
 

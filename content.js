@@ -464,10 +464,12 @@ function createDOMTreeVisualization(
     setupPageGuide(previewContent);
 
     // 실제 브라우저 렌더링 순서로 DOM 트리 구성
-    buildDOMTreeInDocumentOrder(
+    // 재귀 방식으로 정확한 트리 구조 생성
+    buildDOMTree(
       document.documentElement,
       treeContent,
       previewContent,
+      0,
       isDarkMode
     );
 
@@ -825,187 +827,35 @@ function setupPageGuide(previewContainer) {
 }
 
 // 실제 브라우저 렌더링 순서로 DOM 트리 구성
-function buildDOMTreeInDocumentOrder(
+function buildDOMTree(
   rootElement,
   treeContainer,
   previewContainer,
+  depth,
   isDarkMode
 ) {
-  // 문서 순서대로 모든 요소 수집
-  const allElements = [];
-  const elementDepths = new Map();
+  if (!rootElement || depth > 8) return; // 깊이 제한
 
-  function collectElements(element, depth = 0) {
-    if (shouldSkipElement(element)) return;
+  // 시각화 창들과 그 자식 요소들은 제외
+  if (shouldSkipElement(rootElement)) return;
 
-    allElements.push(element);
-    elementDepths.set(element, depth);
-
-    // 자식 요소들 순차적으로 수집
-    Array.from(element.children || []).forEach((child) => {
-      collectElements(child, depth + 1);
-    });
-  }
-
-  collectElements(rootElement);
-
-  // 실제 브라우저 렌더링 순서 시뮬레이션 (속도 개선)
-  let currentTime = 0;
-  const RENDER_INTERVAL = 30; // 30ms 간격으로 요소 처리 (100ms → 30ms로 빠르게)
-
-  allElements.forEach((element, index) => {
-    const depth = elementDepths.get(element);
-    const elementType = getElementRenderingPriority(element);
-
-    // 요소 타입에 따른 렌더링 지연시간 계산
-    const baseDelay = currentTime + index * RENDER_INTERVAL;
-    const typeDelay = elementType.delay;
-    const totalDelay = baseDelay + typeDelay;
-
-    setTimeout(() => {
-      buildSingleDOMNode(
-        element,
-        treeContainer,
-        previewContainer,
-        depth,
-        isDarkMode,
-        index
-      );
-    }, totalDelay);
-
-    // 다음 요소를 위한 시간 업데이트
-    currentTime += RENDER_INTERVAL;
-  });
-}
-
-// 요소의 렌더링 우선순위 결정
-function getElementRenderingPriority(element) {
-  if (!element.tagName) return { priority: 0, delay: 0 };
-
-  const tagName = element.tagName.toLowerCase();
-
-  // 실제 브라우저 렌더링 우선순위
-  const priorities = {
-    // Critical resources (즉시 처리)
-    html: { priority: 1, delay: 0 },
-    head: { priority: 1, delay: 0 },
-    meta: { priority: 1, delay: 0 },
-    title: { priority: 1, delay: 0 },
-    link: { priority: 1, delay: 50 }, // CSS 로드
-    style: { priority: 1, delay: 30 }, // 인라인 CSS
-
-    // Scripts (블로킹 가능)
-    script: { priority: 2, delay: 100 },
-
-    // Body and structural elements
-    body: { priority: 3, delay: 0 },
-    header: { priority: 3, delay: 0 },
-    nav: { priority: 3, delay: 0 },
-    main: { priority: 3, delay: 0 },
-    section: { priority: 3, delay: 0 },
-    article: { priority: 3, delay: 0 },
-    aside: { priority: 3, delay: 0 },
-    footer: { priority: 3, delay: 0 },
-
-    // Content elements
-    div: { priority: 4, delay: 0 },
-    span: { priority: 4, delay: 0 },
-    p: { priority: 4, delay: 0 },
-    h1: { priority: 4, delay: 0 },
-    h2: { priority: 4, delay: 0 },
-    h3: { priority: 4, delay: 0 },
-    h4: { priority: 4, delay: 0 },
-    h5: { priority: 4, delay: 0 },
-    h6: { priority: 4, delay: 0 },
-
-    // Interactive elements
-    button: { priority: 4, delay: 0 },
-    input: { priority: 4, delay: 0 },
-    form: { priority: 4, delay: 0 },
-    select: { priority: 4, delay: 0 },
-    textarea: { priority: 4, delay: 0 },
-
-    // Media elements (리소스 로딩 시간 고려)
-    img: { priority: 5, delay: 200 },
-    video: { priority: 5, delay: 300 },
-    audio: { priority: 5, delay: 250 },
-    canvas: { priority: 5, delay: 100 },
-    svg: { priority: 5, delay: 50 },
-  };
-
-  return priorities[tagName] || { priority: 4, delay: 0 };
-}
-
-// 단일 DOM 노드 구성 (기존 buildDOMTree에서 단일 노드 부분 추출)
-function buildSingleDOMNode(
-  element,
-  treeContainer,
-  previewContainer,
-  depth,
-  isDarkMode,
-  documentIndex
-) {
   const nodeDiv = document.createElement("div");
   const indent = "  ".repeat(depth);
-  const tagName = element.tagName
-    ? element.tagName.toLowerCase()
-    : element.nodeName;
+  const tagName = rootElement.tagName
+    ? rootElement.tagName.toLowerCase()
+    : rootElement.nodeName;
 
   // 자식 요소들 확인 (시각화 창 요소들은 제외)
-  const children = Array.from(element.children || []).filter(
+  const children = Array.from(rootElement.children || []).filter(
     (child) => !shouldSkipElement(child)
   );
   const hasChildren = children.length > 0;
 
-  // 부모 컨테이너 찾기 (depth에 따라)
-  let container = treeContainer;
-  if (depth > 0) {
-    // 부모 요소의 children container 찾기
-    const parentElement = element.parentElement;
-    if (parentElement) {
-      const parentContainer = treeContainer.querySelector(
-        `[data-element-id="${getElementUniqueId(
-          parentElement
-        )}"] .tree-children`
-      );
-      if (parentContainer) {
-        container = parentContainer;
-      }
-    }
-  }
-
   // 노드 컨테이너 생성
   const nodeContainer = document.createElement("div");
   nodeContainer.classList.add("tree-node-container");
-  nodeContainer.dataset.elementId = getElementUniqueId(element);
-  nodeContainer.dataset.documentIndex = documentIndex; // 문서 순서 저장
+  nodeContainer.dataset.elementId = getElementUniqueId(rootElement);
 
-  // 나머지 노드 구성 로직은 기존과 동일...
-  buildNodeContent(
-    element,
-    nodeContainer,
-    previewContainer,
-    depth,
-    isDarkMode,
-    hasChildren,
-    tagName,
-    indent
-  );
-
-  container.appendChild(nodeContainer);
-}
-
-// 노드 내용 구성 함수 (기존 buildDOMTree 로직)
-function buildNodeContent(
-  element,
-  nodeContainer,
-  previewContainer,
-  depth,
-  isDarkMode,
-  hasChildren,
-  tagName,
-  indent
-) {
   // 노드 헤더 생성 (토글 버튼 + 노드 정보)
   const nodeHeader = document.createElement("div");
   nodeHeader.classList.add("tree-node-header");
@@ -1084,7 +934,7 @@ function buildNodeContent(
   nodeHeader.appendChild(nodeText);
 
   // 렌더링 단계를 거치는 요소들에만 badge 컨테이너 추가
-  if (shouldShowRenderingStages(element)) {
+  if (shouldShowRenderingStages(rootElement)) {
     const badgeContainer = document.createElement("div");
     badgeContainer.classList.add("node-badges");
     badgeContainer.style.cssText = `
@@ -1109,10 +959,10 @@ function buildNodeContent(
   nodeContainer.appendChild(childrenContainer);
 
   // 헤더에 이벤트 핸들러 추가
-  nodeHeader.dataset.elementId = getElementUniqueId(element);
+  nodeHeader.dataset.elementId = getElementUniqueId(rootElement);
   addNodeEventHandlers(
     nodeHeader,
-    element,
+    rootElement,
     childrenContainer,
     toggleButton,
     hasChildren,
@@ -1132,27 +982,32 @@ function buildNodeContent(
     }, 50);
 
     // 렌더링 단계를 거치는 요소들만 badge 업데이트 (시간 추적 포함)
-    if (shouldShowRenderingStages(element)) {
-      const elementId = getElementUniqueId(element);
+    if (shouldShowRenderingStages(rootElement)) {
+      const elementId = getElementUniqueId(rootElement);
       const timings = {}; // 각 단계별 시간 저장
 
       // 1. Loaded 상태 업데이트
-      timings.loadedStart = Date.now();
       setTimeout(() => {
-        timings.loadedEnd = Date.now();
-        updateNodeStateWithTiming(
-          elementId,
-          "LOADED",
-          isDarkMode,
-          timings.loadedEnd - timings.loadedStart
-        );
-      }, 80); // 200ms → 80ms로 단축
+        // 실제 처리 시간을 시뮬레이션하기 위해 5~15ms 사이의 임의 지연을 부여
+        const simulatedProcessing = Math.random() * 10 + 5; // 5~15ms
+
+        const start = Date.now();
+        setTimeout(() => {
+          const end = Date.now();
+          updateNodeStateWithTiming(
+            elementId,
+            "LOADED",
+            isDarkMode,
+            end - start
+          );
+        }, simulatedProcessing);
+      }, 0);
 
       // 2. DOM 생성 단계 - 미리보기에 기본 박스 생성
-      if (shouldShowInPreview(element)) {
+      if (shouldShowInPreview(rootElement)) {
         setTimeout(() => {
           timings.parsedStart = Date.now();
-          createDOMPhase(element, previewContainer, depth);
+          createDOMPhase(rootElement, previewContainer, depth);
           timings.parsedEnd = Date.now();
           updateNodeStateWithTiming(
             elementId,
@@ -1165,7 +1020,7 @@ function buildNodeContent(
         // 3. Layout 계산 단계
         setTimeout(() => {
           timings.layoutStart = Date.now();
-          layoutPhase(element, previewContainer, depth);
+          layoutPhase(rootElement, previewContainer, depth);
           timings.layoutEnd = Date.now();
           updateNodeStateWithTiming(
             elementId,
@@ -1178,7 +1033,7 @@ function buildNodeContent(
         // 4. Composite 단계 (페인팅)
         setTimeout(() => {
           timings.compositeStart = Date.now();
-          compositePhase(element, previewContainer, depth);
+          compositePhase(rootElement, previewContainer, depth);
           timings.compositeEnd = Date.now();
           updateNodeStateWithTiming(
             elementId,
@@ -1217,403 +1072,21 @@ function buildNodeContent(
     } else {
       // 렌더링 단계를 거치지 않는 요소들 (script, link, meta 등)
       // Preview에 표시되는 경우에만 미리보기 생성
-      if (shouldShowInPreview(element)) {
+      if (shouldShowInPreview(rootElement)) {
         setTimeout(() => {
-          createDOMPhase(element, previewContainer, depth);
+          createDOMPhase(rootElement, previewContainer, depth);
         }, 120);
         setTimeout(() => {
-          layoutPhase(element, previewContainer, depth);
+          layoutPhase(rootElement, previewContainer, depth);
         }, 200);
         setTimeout(() => {
-          compositePhase(element, previewContainer, depth);
+          compositePhase(rootElement, previewContainer, depth);
         }, 320);
       }
     }
   }, 50); // 100ms → 50ms로 단축
-}
 
-// 노드 이벤트 핸들러 추가
-function addNodeEventHandlers(
-  nodeHeader,
-  element,
-  childrenContainer,
-  toggleButton,
-  hasChildren,
-  depth,
-  previewContainer,
-  isDarkMode
-) {
-  // 호버 효과
-  nodeHeader.onmouseenter = () => {
-    nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.15)`;
-    nodeHeader.style.transform = "translateX(4px)";
-    nodeHeader.style.boxShadow = `0 2px 8px rgba(${getDepthRGB(depth)}, 0.3)`;
-    // 실제 DOM 요소에 파란색 dashed border 추가
-    highlightElement(element, true);
-  };
-
-  nodeHeader.onmouseleave = () => {
-    // 선택된 상태가 아닐 때만 스타일 제거
-    if (!nodeHeader.classList.contains("selected")) {
-      nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.08)`;
-      nodeHeader.style.transform = "translateX(0)";
-      nodeHeader.style.boxShadow = "none";
-
-      // 텍스트 색상 유지
-      const nodeTextSpan = nodeHeader.querySelector("span:not(.tree-toggle)");
-      if (nodeTextSpan) {
-        nodeTextSpan.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
-      }
-
-      // 하이라이트 제거
-      removeHighlight(element);
-    }
-  };
-
-  // 클릭 효과
-  nodeHeader.onclick = (e) => {
-    e.stopPropagation(); // 이벤트 버블링 방지
-
-    // 자식이 있는 노드에서 더블클릭 또는 일반 클릭 시 expand/collapse 기능
-    if (hasChildren) {
-      const isExpanded =
-        childrenContainer.style.maxHeight !== "0px" &&
-        childrenContainer.style.maxHeight !== "";
-
-      // 더블클릭이 아닌 일반 클릭도 expand/collapse 기능으로 처리
-      if (isExpanded) {
-        // 접기
-        childrenContainer.style.maxHeight = "0px";
-        childrenContainer.style.opacity = "0";
-        if (toggleButton) {
-          toggleButton.textContent = "▶";
-          toggleButton.style.transform = "rotate(-90deg)";
-        }
-      } else {
-        // 펼치기
-        childrenContainer.style.maxHeight = "none";
-        childrenContainer.style.opacity = "1";
-        if (toggleButton) {
-          toggleButton.textContent = "▼";
-          toggleButton.style.transform = "rotate(0deg)";
-        }
-      }
-    }
-
-    // 노드 선택 효과 (expand/collapse와 동시 실행)
-    const container = nodeHeader.closest("#tree-content");
-    if (container) {
-      // 기존 선택된 노드 스타일 제거
-      const prevSelected = container.querySelector(
-        ".tree-node-header.selected"
-      );
-      if (prevSelected) {
-        prevSelected.classList.remove("selected");
-        const prevDepth = parseInt(prevSelected.dataset.depth) || 0;
-        prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
-      }
-
-      // 현재 노드 선택 스타일 적용
-      nodeHeader.classList.add("selected");
-      nodeHeader.dataset.depth = depth;
-      nodeHeader.style.background = "#007aff20";
-
-      // 선택된 노드의 텍스트 색상 유지
-      const selectedNodeText = nodeHeader.querySelector(
-        "span:not(.tree-toggle)"
-      );
-      if (selectedNodeText) {
-        selectedNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
-      }
-    }
-
-    // Preview에서도 해당 box 선택 상태로 만들기
-    const previewBox = previewContainer.querySelector(
-      `[data-element-id="${getElementUniqueId(element)}"]`
-    );
-
-    if (previewBox) {
-      // 기존 선택된 Preview box 스타일 제거
-      const prevSelectedPreview = previewContainer.querySelector(
-        ".preview-box.selected"
-      );
-      if (prevSelectedPreview) {
-        prevSelectedPreview.classList.remove("selected");
-        prevSelectedPreview.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
-        prevSelectedPreview.style.transform = "scale(1)";
-        prevSelectedPreview.style.zIndex = "";
-      }
-
-      // 현재 Preview box 선택 스타일 적용
-      previewBox.classList.add("selected");
-      previewBox.style.boxShadow = "0 0 12px rgba(0, 122, 255, 0.8)";
-      previewBox.style.transform = "scale(1.15)";
-      previewBox.style.zIndex = "1000";
-    }
-
-    // 실제 DOM 요소에 파란색 shadow 추가
-    removeAllHighlights();
-    highlightElement(element, true);
-
-    // 실제 웹사이트에서 해당 요소로 스크롤
-    element.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
-    });
-  };
-}
-
-function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
-  if (!element || depth > 8) return; // 깊이 제한
-
-  // 시각화 창들과 그 자식 요소들은 제외
-  if (shouldSkipElement(element)) return;
-
-  const nodeDiv = document.createElement("div");
-  const indent = "  ".repeat(depth);
-  const tagName = element.tagName
-    ? element.tagName.toLowerCase()
-    : element.nodeName;
-
-  // 자식 요소들 확인 (시각화 창 요소들은 제외)
-  const children = Array.from(element.children || []).filter(
-    (child) => !shouldSkipElement(child)
-  );
-  const hasChildren = children.length > 0;
-
-  // 노드 컨테이너 생성
-  const nodeContainer = document.createElement("div");
-  nodeContainer.classList.add("tree-node-container");
-  nodeContainer.dataset.elementId = getElementUniqueId(element);
-
-  // 노드 헤더 생성 (토글 버튼 + 노드 정보)
-  const nodeHeader = document.createElement("div");
-  nodeHeader.classList.add("tree-node-header");
-  nodeHeader.style.cssText = `
-    display: flex;
-    align-items: center;
-    margin: 4px 0;
-    padding: 10px 14px;
-    border-left: 3px solid ${getDepthColor(depth)};
-    background: rgba(${getDepthRGB(depth)}, 0.08);
-    border-radius: 8px;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    font-size: 14px;
-    line-height: 1.4;
-    color: ${isDarkMode ? "#f2f2f7" : "#1d1d1f"};
-    border: 1px solid rgba(${getDepthRGB(depth)}, 0.2);
-    font-weight: 500;
-  `;
-
-  // 토글 버튼 (자식이 있을 때만)
-  let toggleButton = null;
-  if (hasChildren) {
-    toggleButton = document.createElement("span");
-    toggleButton.classList.add("tree-toggle");
-    toggleButton.textContent = "▼"; // 기본적으로 펼쳐진 상태
-    toggleButton.title = "Click to collapse/expand";
-    toggleButton.style.cssText = `
-      margin-right: 10px;
-      font-size: 11px;
-      color: ${isDarkMode ? "#a1a1a6" : "#666"};
-      transition: transform 0.2s ease, background 0.2s ease;
-      user-select: none;
-      min-width: 14px;
-      text-align: center;
-      cursor: pointer;
-      border-radius: 50%;
-      padding: 3px;
-      font-weight: 600;
-    `;
-
-    // 토글 버튼 호버 효과
-    toggleButton.addEventListener("mouseenter", () => {
-      toggleButton.style.background = isDarkMode
-        ? "rgba(100, 181, 246, 0.15)"
-        : "rgba(0, 122, 255, 0.1)";
-      toggleButton.style.color = isDarkMode ? "#f2f2f7" : "#007aff";
-    });
-
-    toggleButton.addEventListener("mouseleave", () => {
-      toggleButton.style.background = "transparent";
-      toggleButton.style.color = isDarkMode ? "#a1a1a6" : "#666";
-    });
-
-    nodeHeader.appendChild(toggleButton);
-  } else {
-    // 자식이 없으면 빈 공간 추가 (정렬 맞춤)
-    const spacer = document.createElement("span");
-    spacer.style.cssText = `
-      margin-right: 24px;
-      min-width: 14px;
-    `;
-    nodeHeader.appendChild(spacer);
-  }
-
-  // 노드 텍스트 생성 - 태그 이름만 표시 (waterfall 스타일)
-  const nodeText = document.createElement("span");
-  nodeText.innerHTML = `${indent}${depth > 0 ? "├─ " : ""}${tagName}`;
-  nodeText.style.cssText = `
-    white-space: pre-wrap;
-    flex: 1;
-    color: ${isDarkMode ? "#f2f2f7" : "#1d1d1f"};
-    font-weight: 500;
-  `;
-  nodeHeader.appendChild(nodeText);
-
-  // 렌더링 단계를 거치는 요소들에만 badge 컨테이너 추가
-  if (shouldShowRenderingStages(element)) {
-    const badgeContainer = document.createElement("div");
-    badgeContainer.classList.add("node-badges");
-    badgeContainer.style.cssText = `
-      display: flex;
-      gap: 4px;
-      margin-left: 8px;
-    `;
-    nodeHeader.appendChild(badgeContainer);
-  }
-
-  // 자식 요소들을 담을 컨테이너
-  const childrenContainer = document.createElement("div");
-  childrenContainer.classList.add("tree-children");
-  childrenContainer.style.cssText = `
-    margin-left: 16px;
-    transition: all 0.3s ease;
-    overflow: hidden;
-  `;
-
-  // 노드 컨테이너에 헤더와 자식 컨테이너 추가
-  nodeContainer.appendChild(nodeHeader);
-  nodeContainer.appendChild(childrenContainer);
-
-  // 헤더에 이벤트 핸들러 추가
-  nodeHeader.dataset.elementId = getElementUniqueId(element);
-
-  // 호버 효과
-  nodeHeader.onmouseenter = () => {
-    nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.15)`;
-    nodeHeader.style.transform = "translateX(4px)";
-    nodeHeader.style.boxShadow = `0 2px 8px rgba(${getDepthRGB(depth)}, 0.3)`;
-    // 실제 DOM 요소에 파란색 dashed border 추가
-    highlightElement(element, true);
-  };
-
-  nodeHeader.onmouseleave = () => {
-    // 선택된 상태가 아닐 때만 스타일 제거
-    if (!nodeHeader.classList.contains("selected")) {
-      nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.08)`;
-      nodeHeader.style.transform = "translateX(0)";
-      nodeHeader.style.boxShadow = "none";
-
-      // 텍스트 색상 유지
-      const nodeTextSpan = nodeHeader.querySelector("span:not(.tree-toggle)");
-      if (nodeTextSpan) {
-        nodeTextSpan.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
-      }
-
-      // 하이라이트 제거
-      removeHighlight(element);
-    }
-  };
-
-  // 클릭 효과
-  nodeHeader.onclick = (e) => {
-    e.stopPropagation(); // 이벤트 버블링 방지
-
-    // 자식이 있는 노드에서 더블클릭 또는 일반 클릭 시 expand/collapse 기능
-    if (hasChildren) {
-      const isExpanded =
-        childrenContainer.style.maxHeight !== "0px" &&
-        childrenContainer.style.maxHeight !== "";
-
-      // 더블클릭이 아닌 일반 클릭도 expand/collapse 기능으로 처리
-      if (isExpanded) {
-        // 접기
-        childrenContainer.style.maxHeight = "0px";
-        childrenContainer.style.opacity = "0";
-        if (toggleButton) {
-          toggleButton.textContent = "▶";
-          toggleButton.style.transform = "rotate(-90deg)";
-        }
-      } else {
-        // 펼치기
-        childrenContainer.style.maxHeight = "none";
-        childrenContainer.style.opacity = "1";
-        if (toggleButton) {
-          toggleButton.textContent = "▼";
-          toggleButton.style.transform = "rotate(0deg)";
-        }
-      }
-    }
-
-    // 노드 선택 효과 (expand/collapse와 동시 실행)
-    // 기존 선택된 노드 스타일 제거
-    const prevSelected = container.querySelector(".tree-node-header.selected");
-    if (prevSelected) {
-      prevSelected.classList.remove("selected");
-      const prevDepth = parseInt(prevSelected.dataset.depth) || 0;
-      prevSelected.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
-
-      // 이전 선택된 노드의 텍스트 색상도 복원
-      const prevNodeText = prevSelected.querySelector(
-        "span:not(.tree-toggle)"
-      );
-      if (prevNodeText) {
-        prevNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
-      }
-    }
-
-    // 현재 노드 선택 스타일 적용
-    nodeHeader.classList.add("selected");
-    nodeHeader.dataset.depth = depth;
-    nodeHeader.style.background = "#007aff20";
-
-    // 선택된 노드의 텍스트 색상 유지
-    const selectedNodeText = nodeHeader.querySelector("span:not(.tree-toggle)");
-    if (selectedNodeText) {
-      selectedNodeText.style.color = isDarkMode ? "#f2f2f7" : "#1d1d1f";
-    }
-
-    // Preview에서도 해당 box 선택 상태로 만들기
-    const previewBox = previewContainer.querySelector(
-      `[data-element-id="${getElementUniqueId(element)}"]`
-    );
-
-    if (previewBox) {
-      // 기존 선택된 Preview box 스타일 제거
-      const prevSelectedPreview = previewContainer.querySelector(
-        ".preview-box.selected"
-      );
-      if (prevSelectedPreview) {
-        prevSelectedPreview.classList.remove("selected");
-        prevSelectedPreview.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
-        prevSelectedPreview.style.transform = "scale(1)";
-        prevSelectedPreview.style.zIndex = "";
-      }
-
-      // 현재 Preview box 선택 스타일 적용
-      previewBox.classList.add("selected");
-      previewBox.style.boxShadow = "0 0 12px rgba(0, 122, 255, 0.8)";
-      previewBox.style.transform = "scale(1.15)";
-      previewBox.style.zIndex = "1000";
-    }
-
-    // 실제 DOM 요소에 파란색 shadow 추가
-    removeAllHighlights();
-    highlightElement(element, true);
-
-    // 실제 웹사이트에서 해당 요소로 스크롤
-    element.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
-    });
-  };
-
-  container.appendChild(nodeContainer);
+  treeContainer.appendChild(nodeContainer);
 
   // 렌더링 과정 시뮬레이션
   const renderDelay = depth * 200 + Math.random() * 150;
@@ -1628,30 +1101,30 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
     }, 50);
 
     // 렌더링 단계를 거치는 요소들만 badge 업데이트
-    if (shouldShowRenderingStages(element)) {
+    if (shouldShowRenderingStages(rootElement)) {
       // 1. Loaded 상태 업데이트
       setTimeout(() => {
-        updateNodeState(getElementUniqueId(element), "LOADED", isDarkMode);
+        updateNodeState(getElementUniqueId(rootElement), "LOADED", isDarkMode);
       }, 200);
 
       // 2. DOM 생성 단계 - 미리보기에 기본 박스 생성
-      if (shouldShowInPreview(element)) {
+      if (shouldShowInPreview(rootElement)) {
         setTimeout(() => {
-          createDOMPhase(element, previewContainer, depth);
-          updateNodeState(getElementUniqueId(element), "PARSED", isDarkMode);
+          createDOMPhase(rootElement, previewContainer, depth);
+          updateNodeState(getElementUniqueId(rootElement), "PARSED", isDarkMode);
         }, 300);
 
         // 3. Layout 계산 단계
         setTimeout(() => {
-          layoutPhase(element, previewContainer, depth);
-          updateNodeState(getElementUniqueId(element), "LAYOUT", isDarkMode);
+          layoutPhase(rootElement, previewContainer, depth);
+          updateNodeState(getElementUniqueId(rootElement), "LAYOUT", isDarkMode);
         }, 800);
 
         // 4. Composite 단계 (페인팅)
         setTimeout(() => {
-          compositePhase(element, previewContainer, depth);
+          compositePhase(rootElement, previewContainer, depth);
           updateNodeState(
-            getElementUniqueId(element),
+            getElementUniqueId(rootElement),
             "COMPOSITED",
             isDarkMode
           );
@@ -1659,14 +1132,14 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
       } else {
         // Preview에 표시되지 않지만 렌더링 단계를 거치는 요소들
         setTimeout(() => {
-          updateNodeState(getElementUniqueId(element), "PARSED", isDarkMode);
+          updateNodeState(getElementUniqueId(rootElement), "PARSED", isDarkMode);
         }, 300);
         setTimeout(() => {
-          updateNodeState(getElementUniqueId(element), "LAYOUT", isDarkMode);
+          updateNodeState(getElementUniqueId(rootElement), "LAYOUT", isDarkMode);
         }, 800);
         setTimeout(() => {
           updateNodeState(
-            getElementUniqueId(element),
+            getElementUniqueId(rootElement),
             "COMPOSITED",
             isDarkMode
           );
@@ -1675,15 +1148,15 @@ function buildDOMTree(element, container, previewContainer, depth, isDarkMode) {
     } else {
       // 렌더링 단계를 거치지 않는 요소들 (script, link, meta 등)
       // Preview에 표시되는 경우에만 미리보기 생성
-      if (shouldShowInPreview(element)) {
+      if (shouldShowInPreview(rootElement)) {
         setTimeout(() => {
-          createDOMPhase(element, previewContainer, depth);
+          createDOMPhase(rootElement, previewContainer, depth);
         }, 300);
         setTimeout(() => {
-          layoutPhase(element, previewContainer, depth);
+          layoutPhase(rootElement, previewContainer, depth);
         }, 800);
         setTimeout(() => {
-          compositePhase(element, previewContainer, depth);
+          compositePhase(rootElement, previewContainer, depth);
         }, 1300);
       }
     }
@@ -3295,4 +2768,100 @@ function changeWindowOpacity(opacity) {
   if (previewContainer) {
     previewContainer.style.opacity = opacity;
   }
+}
+
+// 노드 이벤트 핸들러를 위한 공통 함수 (재추가)
+function addNodeEventHandlers(
+  nodeHeader,
+  element,
+  childrenContainer,
+  toggleButton,
+  hasChildren,
+  depth,
+  previewContainer,
+  isDarkMode
+) {
+  // 호버 시 실제 DOM 요소와 트리 노드 모두 하이라이트
+  nodeHeader.onmouseenter = () => {
+    nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.15)`;
+    nodeHeader.style.transform = "translateX(4px)";
+    nodeHeader.style.boxShadow = `0 2px 8px rgba(${getDepthRGB(depth)}, 0.3)`;
+    highlightElement(element, true);
+  };
+
+  nodeHeader.onmouseleave = () => {
+    if (!nodeHeader.classList.contains("selected")) {
+      nodeHeader.style.background = `rgba(${getDepthRGB(depth)}, 0.08)`;
+      nodeHeader.style.transform = "translateX(0)";
+      nodeHeader.style.boxShadow = "none";
+      removeHighlight(element);
+    }
+  };
+
+  // 클릭 시 선택 및 자식 토글
+  nodeHeader.onclick = (e) => {
+    e.stopPropagation();
+
+    // 자식 토글 처리
+    if (hasChildren) {
+      const isExpanded =
+        childrenContainer.style.maxHeight !== "0px" &&
+        childrenContainer.style.maxHeight !== "";
+      if (isExpanded) {
+        childrenContainer.style.maxHeight = "0px";
+        childrenContainer.style.opacity = "0";
+        if (toggleButton) {
+          toggleButton.textContent = "▶";
+          toggleButton.style.transform = "rotate(-90deg)";
+        }
+      } else {
+        childrenContainer.style.maxHeight = "none";
+        childrenContainer.style.opacity = "1";
+        if (toggleButton) {
+          toggleButton.textContent = "▼";
+          toggleButton.style.transform = "rotate(0deg)";
+        }
+      }
+    }
+
+    // 기존 선택 해제
+    const container = nodeHeader.closest("#tree-content");
+    if (container) {
+      const prev = container.querySelector(".tree-node-header.selected");
+      if (prev) {
+        prev.classList.remove("selected");
+        const prevDepth = parseInt(prev.dataset.depth) || 0;
+        prev.style.background = `rgba(${getDepthRGB(prevDepth)}, 0.08)`;
+      }
+    }
+
+    // 현재 선택 표시
+    nodeHeader.classList.add("selected");
+    nodeHeader.dataset.depth = depth;
+    nodeHeader.style.background = "#007aff20";
+
+    // Preview box 선택 동기화
+    if (previewContainer) {
+      const prevBox = previewContainer.querySelector(".preview-box.selected");
+      if (prevBox) {
+        prevBox.classList.remove("selected");
+        prevBox.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
+        prevBox.style.transform = "scale(1)";
+        prevBox.style.zIndex = "";
+      }
+      const currentBox = previewContainer.querySelector(
+        `[data-element-id="${getElementUniqueId(element)}"]`
+      );
+      if (currentBox) {
+        currentBox.classList.add("selected");
+        currentBox.style.boxShadow = "0 0 12px rgba(0, 122, 255, 0.8)";
+        currentBox.style.transform = "scale(1.15)";
+        currentBox.style.zIndex = "1000";
+      }
+    }
+
+    removeAllHighlights();
+    highlightElement(element, true);
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 }
